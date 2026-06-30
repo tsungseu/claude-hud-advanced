@@ -415,6 +415,14 @@ npm run glm:poll:once   # 单次抓取，用于验证 key
 Usage ██░░░░░░░░ 25% (1h 30m / 5h)
 ```
 
+### 通过 SessionStart hook 自动启动
+
+本 fork 带一个 `SessionStart` hook（见 `plugin.json`），每次开 Claude Code 会话时执行 `glm/poller.mjs --ensure`。`--ensure` 模式先查 PID 文件，仅在**没有常驻实例**时以 detached 方式拉起一个长期运行的进程——跨会话幂等，不会起重复实例。
+
+效果：`/plugin install` 之后，下次开 Claude Code 会话会自动起 poller，随后在后台常驻（会话退出也继续运行）。无需 systemd / launchd / NSSM。
+
+注意：detached 进程**不跨系统重启**——重启后会在下次开 Claude Code 会话时重新拉起。若要真正的 7×24 常驻（如服务器），仍使用下面的服务方案；两者可共存（PID 检测防止重复实例）。
+
 ### 作为系统服务常驻（开机自启 + 崩溃自动重启）
 
 loop 模式是常驻进程，重启电脑后需重新拉起。下面按平台给出**开机自启 + 异常自动重启**方案。请把 `NODE`（如 `/usr/bin/node`、`/opt/homebrew/bin/node`）和 `POLLER`（`glm/poller.mjs` 的绝对路径）换成你的实际值。

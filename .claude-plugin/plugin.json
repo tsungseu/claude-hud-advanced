@@ -13,5 +13,17 @@
   "homepage": "https://github.com/jarrodwatts/claude-hud",
   "repository": "https://github.com/jarrodwatts/claude-hud",
   "license": "MIT",
-  "keywords": ["hud", "monitoring", "statusline", "context", "tools", "agents", "todos", "claude-code"]
+  "keywords": ["hud", "monitoring", "statusline", "context", "tools", "agents", "todos", "claude-code"],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/glm/poller.mjs\" --ensure"
+          }
+        ]
+      }
+    ]
+  }
 }

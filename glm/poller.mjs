@@ -17,12 +17,15 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 
 // import.meta.dirname only exists on Node 20.11+; derive it portably so the
 // poller works on Node 18+ (the documented minimum runtime).
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const ENDPOINT = 'https://open.bigmodel.cn/api/monitor/usage/quota/limit';
+
+const PID_FILE = join(homedir(), '.claude', 'glm-poller.pid');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -211,8 +214,67 @@ async function poll(config, { once = false } = {}) {
   }
 }
 
+/**
+ * --ensure mode (used by the SessionStart hook): start a detached long-lived
+ * poller if one isn't already running, then return immediately. Idempotent via
+ * a PID file + process.kill(pid, 0) liveness check, so repeated hook fires
+ * (every new Claude Code session) never spawn duplicates.
+ */
+function ensureRunning() {
+  // 1. Is an instance already alive?
+  try {
+    const pid = Number.parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
+    if (Number.isFinite(pid) && pid > 0) {
+      try {
+        process.kill(pid, 0); // throws if the process is not alive
+        process.stderr.write(
+          '[glm-poller] already running (pid ' + pid + '); --ensure exiting.\n',
+        );
+        return;
+      } catch {
+        // Stale PID file — fall through and (re)start.
+      }
+    }
+  } catch {
+    // No PID file yet — fall through.
+  }
+
+  // 2. Spawn a detached long-lived instance of this same script (loop mode).
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url)], {
+    detached: true,
+    stdio: 'ignore',
+    cwd: __dirname,
+    windowsHide: true,
+    env: { ...process.env },
+  });
+  child.unref();
+
+  try {
+    fs.writeFileSync(PID_FILE, String(child.pid));
+  } catch {
+    // Best-effort; the PID file only avoids duplicate spawns.
+  }
+  process.stderr.write(
+    '[glm-poller] started detached poller (pid ' + child.pid + ').\n',
+  );
+}
+
 async function main() {
   const config = resolveConfig();
+
+  // --ensure: daemonize if not already running, then exit 0 (never block the hook).
+  if (process.argv.includes('--ensure')) {
+    if (!config.apiKey) {
+      process.stderr.write(
+        '[glm-poller] --ensure: no API key resolved; skipping (configure a key to enable).\n',
+      );
+      process.exitCode = 0;
+      return;
+    }
+    ensureRunning();
+    process.exitCode = 0;
+    return;
+  }
 
   if (!config.apiKey) {
     process.stderr.write(

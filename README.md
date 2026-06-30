@@ -438,6 +438,14 @@ In `~/.claude/plugins/claude-hud/config.json`:
 Usage ██░░░░░░░░ 25% (1h 30m / 5h)
 ```
 
+### Automatic start via SessionStart hook
+
+This fork ships a `SessionStart` hook (see `plugin.json`) that runs `glm/poller.mjs --ensure` whenever a Claude Code session opens. In `--ensure` mode the poller checks a PID file and launches a **detached, long-lived** instance only if one isn't already running — idempotent across sessions.
+
+Result: after `/plugin install`, the next Claude Code session auto-starts the poller, which then runs in the background (and survives the session ending). No systemd / launchd / NSSM setup needed.
+
+Caveat: a detached process does **not** survive a machine reboot — it relaunches on the next Claude Code session. For true 7×24 uptime (e.g. a server), still use the service setups below; the hook and the service coexist (the PID check prevents duplicate instances).
+
 ### Run as a system service (boot start + crash auto-restart)
 
 The loop mode is a daemon and must be re-launched after a reboot. Replace `NODE` (e.g. `/usr/bin/node`, `/opt/homebrew/bin/node`) and `POLLER` (absolute path to `glm/poller.mjs`) for your install.
