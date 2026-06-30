@@ -1,5 +1,5 @@
 /**
- * glm/poller.mjs — GLM (BigModel) → claude-hud quota bridge poller.
+ * src/providers/glm/poller.mjs — GLM (BigModel) → claude-hud quota bridge poller.
  *
  * Self-contained, local-only background process. Periodically queries the GLM
  * usage-quota API and atomically writes a claude-hud "external usage" snapshot
@@ -110,7 +110,7 @@ function resolveConfig() {
     typeof fromFile.snapshotPath === 'string' && fromFile.snapshotPath.trim().length > 0
       ? fromFile.snapshotPath
       : defaults.snapshotPath;
-  // apiKey priority: explicit GLM_API_KEY env > glm/config.json > auto-detect from
+  // apiKey priority: explicit GLM_API_KEY env > src/providers/glm/config.json > auto-detect from
   // ~/.claude/settings.json. NO default.
   const settingsEnv = readSettingsEnv();
   const apiKey =

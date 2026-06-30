@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/glm/poller.mjs\" --ensure"
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/providers/glm/poller.mjs\" --ensure"
           }
         ]
       }

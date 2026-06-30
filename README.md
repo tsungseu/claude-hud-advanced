@@ -395,7 +395,7 @@ Leaving it unset (or setting an explicit negative: `0`, `false`, `off`, `no`) ke
 
 ## GLM / BigModel Usage Bridge
 
-When you run Claude Code through a GLM (Zhipu AI / BigModel) proxy such as `glm-5.2`, the proxy does not emit Anthropic-style `rate_limits` on the statusline stdin, so the Usage line stays empty. The bundled `glm/` module bridges this gap: a standalone poller queries the BigModel quota API on a timer and writes a local usage snapshot that Claude HUD reads.
+When you run Claude Code through a GLM (Zhipu AI / BigModel) proxy such as `glm-5.2`, the proxy does not emit Anthropic-style `rate_limits` on the statusline stdin, so the Usage line stays empty. The bundled `src/providers/glm/` module bridges this gap: a standalone poller queries the BigModel quota API on a timer and writes a local usage snapshot that Claude HUD reads.
 
 **Architecture:** the poller is a separate, long-lived process; the HUD's statusline process stays local-only (it only reads the snapshot, never makes network calls). The poller uses only Node 18+ built-ins (`fs` / `os` / global `fetch`) — zero npm dependencies.
 
@@ -409,7 +409,7 @@ When you run Claude Code through a GLM (Zhipu AI / BigModel) proxy such as `glm-
 ### Configure the API key (any one; highest priority first)
 
 - `GLM_API_KEY` env var, **or**
-- `apiKey` in `glm/config.json` (copy from `glm/config.example.json`), **or**
+- `apiKey` in `src/providers/glm/config.json` (copy from `src/providers/glm/config.example.json`), **or**
 - auto-detected from `~/.claude/settings.json` `env` when `ANTHROPIC_BASE_URL` points at `bigmodel` (reuses `ANTHROPIC_AUTH_TOKEN`)
 
 ### Run the poller
@@ -440,7 +440,7 @@ Usage ██░░░░░░░░ 25% (1h 30m / 5h)
 
 ### Automatic start via SessionStart hook
 
-This fork ships a `SessionStart` hook (see `plugin.json`) that runs `glm/poller.mjs --ensure` whenever a Claude Code session opens. In `--ensure` mode the poller checks a PID file and launches a **detached, long-lived** instance only if one isn't already running — idempotent across sessions.
+This fork ships a `SessionStart` hook (see `plugin.json`) that runs `src/providers/glm/poller.mjs --ensure` whenever a Claude Code session opens. In `--ensure` mode the poller checks a PID file and launches a **detached, long-lived** instance only if one isn't already running — idempotent across sessions.
 
 Result: after `/plugin install`, the next Claude Code session auto-starts the poller, which then runs in the background (and survives the session ending). No systemd / launchd / NSSM setup needed.
 
@@ -448,7 +448,7 @@ Caveat: a detached process does **not** survive a machine reboot — it relaunch
 
 ### Run as a system service (boot start + crash auto-restart)
 
-The loop mode is a daemon and must be re-launched after a reboot. Replace `NODE` (e.g. `/usr/bin/node`, `/opt/homebrew/bin/node`) and `POLLER` (absolute path to `glm/poller.mjs`) for your install.
+The loop mode is a daemon and must be re-launched after a reboot. Replace `NODE` (e.g. `/usr/bin/node`, `/opt/homebrew/bin/node`) and `POLLER` (absolute path to `src/providers/glm/poller.mjs`) for your install.
 
 **Linux (systemd user unit)** — `~/.config/systemd/user/glm-poller.service`:
 
@@ -524,7 +524,7 @@ On poller error the old snapshot is preserved (failure-tolerant); the next cycle
 
 ### Security
 
-`glm/config.json` is git-ignored. The poller sends the full key in the `Authorization` header (no `Bearer` prefix — BigModel convention) only to `https://open.bigmodel.cn`. The snapshot is written atomically with `0o600` permissions and contains only percentages and reset timestamps — never the key.
+`src/providers/glm/config.json` is git-ignored. The poller sends the full key in the `Authorization` header (no `Bearer` prefix — BigModel convention) only to `https://open.bigmodel.cn`. The snapshot is written atomically with `0o600` permissions and contains only percentages and reset timestamps — never the key.
 
 ---
 
