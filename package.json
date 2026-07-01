@@ -18,7 +18,9 @@
     "test:update-snapshots": "UPDATE_SNAPSHOTS=1 npm test",
     "test:stdin": "npm run build && echo '{\"model\":{\"display_name\":\"Opus\"},\"context_window\":{\"current_usage\":{\"input_tokens\":45000},\"context_window_size\":200000},\"transcript_path\":\"/tmp/test.jsonl\"}' | node dist/index.js",
     "glm:poll": "node src/providers/glm/poller.mjs",
-    "glm:poll:once": "node src/providers/glm/poller.mjs --once"
+    "glm:poll:once": "node src/providers/glm/poller.mjs --once",
+    "minimax:poll": "node src/providers/minimax/poller.mjs",
+    "minimax:poll:once": "node src/providers/minimax/poller.mjs --once"
   },
   "keywords": [
     "claude-code",

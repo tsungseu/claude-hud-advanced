@@ -21,6 +21,10 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/providers/glm/poller.mjs\" --ensure"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/providers/minimax/poller.mjs\" --ensure"
           }
         ]
       }

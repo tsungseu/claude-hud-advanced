@@ -546,6 +546,39 @@ On poller error the old snapshot is preserved (failure-tolerant); the next cycle
 
 ---
 
+## MiniMax Usage Bridge
+
+A second bundled provider bridge under `src/providers/minimax/`, same shape as the GLM one: a standalone poller queries the MiniMax coding-plan quota API and writes a snapshot claude-hud reads. Useful when you run Claude Code through a MiniMax coding plan.
+
+- **Endpoint**: `GET https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains` (CN) or `https://api.minimax.io/...` (EN) — chosen by `region` (`"cn"` default).
+- **Auth**: `Authorization: Bearer <api key>`.
+- **What it writes**: parses `model_remains["general"]` into `five_hour` (interval bucket) and `seven_day` (weekly bucket, only when `current_weekly_status == 1`). MiniMax returns remaining%, inverted to used%.
+
+### Configure
+
+Same three key sources as GLM (highest priority first): `MINIMAX_API_KEY` env > `apiKey` in `src/providers/minimax/config.json` > auto-detected from `~/.claude/settings.json` when `ANTHROPIC_BASE_URL` points at MiniMax. Region is auto-detected too (`minimax.io` → EN, else CN).
+
+### Run
+
+```bash
+npm run minimax:poll        # loop
+npm run minimax:poll:once   # single fetch
+```
+
+Auto-starts via the same `SessionStart` hook (the `--ensure` runs both GLM and MiniMax; whichever has a resolved key daemonizes, the other skips silently).
+
+### Point claude-hud at it
+
+When you're on a MiniMax provider, set `externalUsagePath` to the MiniMax snapshot (default path `~/.claude/minimax-usage-snapshot.json`):
+
+```json
+{ "display": { "externalUsagePath": "/absolute/path/to/minimax-usage-snapshot.json" } }
+```
+
+To show the weekly row, also set `display.sevenDayThreshold: 0` (see GLM section for the elapsed-time caveat — it applies the same way).
+
+---
+
 ## Requirements
 
 - Claude Code v1.0.80+

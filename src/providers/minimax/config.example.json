@@ -1,0 +1,6 @@
+{
+  "apiKey": "PASTE_YOUR_MINIMAX_API_KEY",
+  "intervalSec": 300,
+  "snapshotPath": "",
+  "region": "cn"
+}
