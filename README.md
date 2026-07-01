@@ -579,6 +579,38 @@ To show the weekly row, also set `display.sevenDayThreshold: 0` (see GLM section
 
 ---
 
+## Other Provider Bridges (Alibaba / Kimi)
+
+Two more bundled bridges under `src/providers/`, same shape as GLM/MiniMax:
+
+### Alibaba (Bailian coding plan)
+
+- **Auth**: API key (Bearer + `x-api-key` + `X-DashScope-API-Key`). The cookie/web-session path is intentionally not ported.
+- **Region**: `intl` (modelstudio.console.alibabacloud.com) or `cn` (bailian.console.aliyun.com); auto-falls back to the other region on retryable failures.
+- **Snapshot**: `~/.claude/alibaba-usage-snapshot.json`; writes `five_hour` + `seven_day` (monthly window dropped — claude-hud has no slot for it).
+- **Key**: `ALIBABA_API_KEY` / `DASHSCOPE_API_KEY` env > `config.json` `apiKey` > settings.json auto-detect.
+
+```bash
+npm run alibaba:poll        # loop
+npm run alibaba:poll:once   # single fetch
+```
+
+### Kimi (Moonshot Code API)
+
+- **Auth**: Kimi **Code API key** (Bearer). Web/JWT path not ported.
+- **Endpoint**: `GET {baseURL}/coding/v1/usages` (baseURL default `https://api.kimi.com`).
+- **Snapshot**: `~/.claude/kimi-usage-snapshot.json`; `response.usage` (weekly) → `seven_day`, `response.limits[0]` (5h rate limit) → `five_hour`.
+- **Key**: `KIMI_CODE_API_KEY` env > `config.json` `apiKey` > settings.json auto-detect.
+
+```bash
+npm run kimi:poll        # loop
+npm run kimi:poll:once   # single fetch
+```
+
+Both auto-start via the `SessionStart` hook (whichever resolves a key daemonizes). When you switch providers, point `display.externalUsagePath` at the matching snapshot and set `display.sevenDayThreshold: 0` to show the weekly row (same elapsed-approximation caveat as GLM).
+
+---
+
 ## Requirements
 
 - Claude Code v1.0.80+

@@ -1,0 +1,6 @@
+{
+  "apiKey": "PASTE_YOUR_KIMI_CODE_API_KEY",
+  "intervalSec": 300,
+  "snapshotPath": "",
+  "baseURL": "https://api.kimi.com"
+}

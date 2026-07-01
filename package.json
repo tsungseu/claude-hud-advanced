@@ -20,7 +20,11 @@
     "glm:poll": "node src/providers/glm/poller.mjs",
     "glm:poll:once": "node src/providers/glm/poller.mjs --once",
     "minimax:poll": "node src/providers/minimax/poller.mjs",
-    "minimax:poll:once": "node src/providers/minimax/poller.mjs --once"
+    "minimax:poll:once": "node src/providers/minimax/poller.mjs --once",
+    "alibaba:poll": "node src/providers/alibaba/poller.mjs",
+    "alibaba:poll:once": "node src/providers/alibaba/poller.mjs --once",
+    "kimi:poll": "node src/providers/kimi/poller.mjs",
+    "kimi:poll:once": "node src/providers/kimi/poller.mjs --once"
   },
   "keywords": [
     "claude-code",

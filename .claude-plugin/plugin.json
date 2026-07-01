@@ -25,6 +25,14 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/providers/minimax/poller.mjs\" --ensure"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/providers/alibaba/poller.mjs\" --ensure"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/providers/kimi/poller.mjs\" --ensure"
           }
         ]
       }

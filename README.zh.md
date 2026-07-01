@@ -556,6 +556,38 @@ npm run minimax:poll:once   # 单次
 
 ---
 
+## 其他 provider 桥接（Alibaba / Kimi）
+
+`src/providers/` 下还有两个桥接，与 GLM/MiniMax 同款结构：
+
+### Alibaba（百炼 coding plan）
+
+- **鉴权**：API key（Bearer + `x-api-key` + `X-DashScope-API-Key`）。未移植 cookie/web-session 模式。
+- **region**：`intl`（modelstudio.console.alibabacloud.com）或 `cn`（bailian.console.aliyun.com）；失败自动回退另一 region。
+- **快照**：`~/.claude/alibaba-usage-snapshot.json`；写 `five_hour` + `seven_day`（月度窗口丢弃——claude-hud 没有月度槽位）。
+- **key**：`ALIBABA_API_KEY` / `DASHSCOPE_API_KEY` 环境变量 > `config.json` 的 `apiKey` > settings.json 自动探测。
+
+```bash
+npm run alibaba:poll        # 循环
+npm run alibaba:poll:once   # 单次
+```
+
+### Kimi（Moonshot Code API）
+
+- **鉴权**：Kimi **Code API key**（Bearer）。未移植 web/JWT 模式。
+- **端点**：`GET {baseURL}/coding/v1/usages`（baseURL 默认 `https://api.kimi.com`）。
+- **快照**：`~/.claude/kimi-usage-snapshot.json`；`response.usage`（周）→ `seven_day`，`response.limits[0]`（5h 速率限制）→ `five_hour`。
+- **key**：`KIMI_CODE_API_KEY` 环境变量 > `config.json` 的 `apiKey` > settings.json 自动探测。
+
+```bash
+npm run kimi:poll        # 循环
+npm run kimi:poll:once   # 单次
+```
+
+两者都通过 `SessionStart` hook 自动启动（有 key 的那个常驻）。切换 provider 时，把 `display.externalUsagePath` 指向对应快照，并设 `display.sevenDayThreshold: 0` 显示周额度行（elapsed 近似注意事项同 GLM）。
+
+---
+
 ## 运行环境要求
 
 - Claude Code v1.0.80+
