@@ -389,6 +389,24 @@ CLAUDE_HUD_DISABLE=1 claude
 - `src/providers/glm/config.json` 的 `apiKey`（从 `src/providers/glm/config.example.json` 复制），**或**
 - 自动探测：当 `~/.claude/settings.json` 的 `env` 里 `ANTHROPIC_BASE_URL` 指向 `bigmodel` 时，复用 `ANTHROPIC_AUTH_TOKEN`
 
+### 周额度 / 长周期（可选）
+
+GLM 除短窗口 `TOKENS_LIMIT`（~5h，用于 Usage 进度条）外，还有一个长周期窗口 `TIME_LIMIT`（~18 天）。要把它也显示成 claude-hud 的周额度行，在 `src/providers/glm/config.json` 设：
+
+```json
+{ "weeklyLimitType": "TIME_LIMIT" }
+```
+
+poller 会把该窗口写进 snapshot 的 `seven_day`。要让它**实际显示**，还需在 `~/.claude/plugins/claude-hud/config.json` 调低阈值：
+
+```json
+{ "display": { "sevenDayThreshold": 0 } }
+```
+
+（默认 80，即用量 ≥80% 才显示；设 `0` 总是显示。）
+
+> 注意：claude-hud 把这行标为 `7d` / `weekly`，且在 `timeFormat: "elapsed"` 下按固定 7 天窗口算已用时长——因此对 GLM 的 ~18 天周期，**百分比准确，但时长和标签是近似**。若要重置倒计时（`resets in 18d`）精确，把 `timeFormat` 改回 `relative`。
+
 ### 运行 poller
 
 ```bash

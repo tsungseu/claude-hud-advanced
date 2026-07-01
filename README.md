@@ -412,6 +412,24 @@ When you run Claude Code through a GLM (Zhipu AI / BigModel) proxy such as `glm-
 - `apiKey` in `src/providers/glm/config.json` (copy from `src/providers/glm/config.example.json`), **or**
 - auto-detected from `~/.claude/settings.json` `env` when `ANTHROPIC_BASE_URL` points at `bigmodel` (reuses `ANTHROPIC_AUTH_TOKEN`)
 
+### Weekly / long-period quota (optional)
+
+GLM also exposes a long-period window (`TIME_LIMIT`, ~18-day cycle) alongside the short `TOKENS_LIMIT` (~5h, used for the Usage bar). To render it as claude-hud's weekly row, set in `src/providers/glm/config.json`:
+
+```json
+{ "weeklyLimitType": "TIME_LIMIT" }
+```
+
+The poller then mirrors that window into the snapshot's `seven_day`. To actually **show** the row, also lower claude-hud's threshold in `~/.claude/plugins/claude-hud/config.json`:
+
+```json
+{ "display": { "sevenDayThreshold": 0 } }
+```
+
+(default 80 hides it unless usage ≥ 80%; `0` always shows it.)
+
+> Caveat: claude-hud labels this row `7d` / `weekly` and, under `timeFormat: "elapsed"`, computes elapsed against a fixed 7-day window — so for GLM's ~18-day cycle the **percentage is correct but the elapsed-time span and label are approximate**. Set `timeFormat` to `relative` if you want the reset countdown (`resets in 18d`) to be exact.
+
 ### Run the poller
 
 ```bash

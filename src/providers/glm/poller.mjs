@@ -118,7 +118,17 @@ function resolveConfig() {
     nonEmpty(fromFile.apiKey) ??
     keyFromSettings(settingsEnv);
 
-  return { apiKey, intervalSec, snapshotPath };
+  // weeklyLimitType: which GLM quota window to mirror into the snapshot's
+  // seven_day (the long-period / "weekly" row). 'none' (default) disables it.
+  // GLM exposes 'TIME_LIMIT' (~18-day cycle) alongside 'TOKENS_LIMIT' (~5h,
+  // already used for five_hour). Set e.g. 'TIME_LIMIT' to also render a
+  // weekly-style row in claude-hud.
+  const weeklyLimitType =
+    typeof fromFile.weeklyLimitType === 'string' && fromFile.weeklyLimitType.trim().length > 0
+      ? fromFile.weeklyLimitType.trim()
+      : 'none';
+
+  return { apiKey, intervalSec, snapshotPath, weeklyLimitType };
 }
 
 /**
@@ -127,7 +137,7 @@ function resolveConfig() {
  * the existing snapshot is NEVER overwritten with bad data.
  */
 async function poll(config, { once = false } = {}) {
-  const { apiKey, snapshotPath } = config;
+  const { apiKey, snapshotPath, weeklyLimitType } = config;
 
   try {
     const res = await fetchWithTimeout(ENDPOINT, {
@@ -157,7 +167,8 @@ async function poll(config, { once = false } = {}) {
       throw new Error('GLM quota response invalid: code/limits unexpected');
     }
 
-    const windows = json.data.limits.filter(
+    const allLimits = json.data.limits;
+    const windows = allLimits.filter(
       (l) =>
         l &&
         l.type === 'TOKENS_LIMIT' &&
@@ -175,6 +186,27 @@ async function poll(config, { once = false } = {}) {
 
     const used = Math.round(Math.min(100, Math.max(0, win.percentage)));
 
+    // Optional long-period window mirrored into seven_day (the weekly row).
+    // Enabled via config.weeklyLimitType (e.g. 'TIME_LIMIT'). Find a matching
+    // window by type and emit it alongside five_hour.
+    let sevenDay = null;
+    if (weeklyLimitType && weeklyLimitType !== 'none') {
+      const weeklyWin = allLimits.find(
+        (l) =>
+          l &&
+          l.type === weeklyLimitType &&
+          Number.isFinite(l.percentage) &&
+          Number.isFinite(l.nextResetTime) &&
+          l.nextResetTime > 0,
+      );
+      if (weeklyWin) {
+        sevenDay = {
+          used_percentage: Math.round(Math.min(100, Math.max(0, weeklyWin.percentage))),
+          resets_at: new Date(weeklyWin.nextResetTime).toISOString(),
+        };
+      }
+    }
+
     const snapshot = {
       updated_at: new Date().toISOString(),
       five_hour: {
@@ -182,6 +214,9 @@ async function poll(config, { once = false } = {}) {
         resets_at: new Date(win.nextResetTime).toISOString(),
       },
     };
+    if (sevenDay) {
+      snapshot.seven_day = sevenDay;
+    }
 
     // Atomic write: temp file (exclusive flag) then rename over the target.
     const tmp = snapshotPath + '.' + process.pid + '.tmp';
@@ -202,8 +237,9 @@ async function poll(config, { once = false } = {}) {
 
     if (once) {
       const resetIso = snapshot.five_hour.resets_at;
+      const weeklyStr = sevenDay ? ', weekly ' + sevenDay.used_percentage + '%' : '';
       process.stdout.write(
-        'GLM usage: ' + used + '% (resets at ' + resetIso + ') -> ' + snapshotPath + '\n',
+        'GLM usage: ' + used + '% (resets at ' + resetIso + ')' + weeklyStr + ' -> ' + snapshotPath + '\n',
       );
     }
   } catch (err) {
