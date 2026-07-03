@@ -86,7 +86,7 @@ Claude HUD gives you better insights into what's happening in your Claude Code s
 
 ### Default (2 lines)
 ```
-[Opus] │ my-project git:(main*)
+[Fable 5] │ my-project git:(main*)
 Context █████░░░░░ 45% │ Usage ██░░░░░░░░ 25% (1h 30m / 5h)
 ```
 - **Line 1** — Model, provider label when positively identified (for example `Bedrock`, `Vertex`), project path, git branch
@@ -126,12 +126,7 @@ Customize your HUD anytime:
 /claude-hud:configure
 ```
 
-The guided flow handles layout, language, and common display toggles. Advanced overrides such as
-custom colors and thresholds are preserved there, but you set them by editing the config file directly:
-
-- **First time setup**: Choose a preset (Full/Essential/Minimal), pick a label language, then fine-tune individual elements
-- **Customize anytime**: Toggle items on/off, adjust git display style, switch layouts, or change label language
-- **Preview before saving**: See exactly how your HUD will look before committing changes
+The guided flow handles layout, language, and common display toggles. Advanced overrides (custom colors, thresholds, `timeFormat`) are preserved there but set by editing the config file directly at `~/.claude/plugins/claude-hud/config.json`.
 
 ### Presets
 
@@ -141,407 +136,218 @@ custom colors and thresholds are preserved there, but you set them by editing th
 | **Essential** | Activity lines + git status, minimal info clutter |
 | **Minimal** | Core only — just model name and context bar |
 
-After choosing a preset, you can turn individual elements on or off.
-
-### Manual Configuration
-
-Edit `~/.claude/plugins/claude-hud/config.json` directly for advanced settings such as `colors.*`,
-`pathLevels`, `maxWidth`, threshold overrides, `display.timeFormat`, and `display.promptCacheTtlSeconds`. Running `/claude-hud:configure`
-preserves those manual settings while still letting you change `language`, layout, and the common
-guided toggles.
-
-Chinese HUD labels are available as an explicit opt-in. English stays the default unless you choose `中文` in `/claude-hud:configure` or set `language` in config. The short `zh` alias remains valid, and new guided config writes the canonical `zh-Hans` value.
-
 ### Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `language` | `en` \| `zh` \| `zh-Hans` | `en` | HUD label language. English is the default; set `zh` or `zh-Hans` to enable Simplified Chinese labels. |
-| `lineLayout` | string | `expanded` | Layout: `expanded` (multi-line) or `compact` (single line) |
-| `pathLevels` | 1-3 | 1 | Directory levels to show in project path |
-| `maxWidth` | number \| `null` | `null` | Optional fallback width used only when terminal width detection fails completely |
-| `forceMaxWidth` | boolean | false | Always use `maxWidth` when it is set, even if terminal width detection returns a smaller value |
-| `elementOrder` | string[] | `["project","addedDirs","context","usage","promptCache","memory","environment","tools","skills","mcp","agents","todos","sessionTime"]` | Expanded-mode element order. Omit entries to hide them in expanded mode. Existing configs keep their explicit order until updated. |
-| `display.mergeGroups` | string[][] | `[["context","usage"]]` | Expanded-mode groups that should share a line when adjacent. Set `[]` to disable merged lines. |
-| `gitStatus.enabled` | boolean | true | Show git branch in HUD |
+| `language` | `en` \| `zh` \| `zh-Hans` | `en` | HUD label language |
+| `lineLayout` | string | `expanded` | `expanded` (multi-line) or `compact` (single line) |
+| `pathLevels` | 1-3 | 1 | Directory levels in project path |
+| `maxWidth` | number \| `null` | `null` | Fallback width when terminal detection fails |
+| `forceMaxWidth` | boolean | false | Always use `maxWidth`, even if terminal is narrower |
+| `elementOrder` | string[] | `["project","addedDirs","context","usage","promptCache","memory","environment","tools","skills","mcp","agents","todos","sessionTime"]` | Expanded-mode element order; omit entries to hide them |
+| `display.mergeGroups` | string[][] | `[["context","usage"]]` | Expanded-mode line groups that share a line; `[]` disables merging |
+| `gitStatus.enabled` | boolean | true | Show git branch |
 | `gitStatus.showDirty` | boolean | true | Show `*` for uncommitted changes |
-| `gitStatus.showAheadBehind` | boolean | false | Show `↑N ↓N` for ahead/behind remote |
-| `gitStatus.pushWarningThreshold` | number | 0 | Color the ahead count with the warning color at or above this unpushed-commit count (`0` disables it) |
-| `gitStatus.pushCriticalThreshold` | number | 0 | Color the ahead count with the critical color at or above this unpushed-commit count (`0` disables it) |
+| `gitStatus.showAheadBehind` | boolean | false | Show `↑N ↓N` ahead/behind |
+| `gitStatus.pushWarningThreshold` | number | 0 | Warning color for ahead count at ≥N (`0` off) |
+| `gitStatus.pushCriticalThreshold` | number | 0 | Critical color for ahead count at ≥N (`0` off) |
 | `gitStatus.showFileStats` | boolean | false | Show file change counts `!M +A ✘D ?U` |
-| `gitStatus.branchOverflow` | `truncate` \| `wrap` | `truncate` | Keep current truncation behavior or let the git block wrap onto its own line boundary when possible |
-| `display.showModel` | boolean | true | Show model name `[Opus]` |
-| `display.showProvider` | boolean | false | Show the provider label *before* the model name, e.g. `[Bedrock \| Opus 4.6]`. Useful when a custom proxy serves identically-named models from different providers. When off, an auto-detected provider still trails the model as before |
-| `display.providerName` | string | `""` | Explicit provider label used with `display.showProvider`, e.g. for a custom proxy that can't be auto-detected. Falls back to the auto-detected provider (Bedrock/Vertex/Enterprise) when empty; capped at 40 chars |
-| `display.showAddedDirs` | boolean | true | Show extra workspace directories from `/add-dir` (e.g. `+sparkle +lib-foo`); empty array renders nothing. In both layouts at most 5 dirs render (overflow shown as `+N more`) and basenames are truncated to 24 chars with `…` |
-| `display.addedDirsLayout` | `inline` \| `line` | `inline` | `inline` puts dirs next to the project name with a `+name` prefix per dir; `line` renders them on a separate `Added dirs: name1, name2` line (no `+` prefix, comma-separated) |
+| `gitStatus.branchOverflow` | `truncate` \| `wrap` | `truncate` | `wrap` lets the git block flow onto its own line |
+| `display.showModel` | boolean | true | Show model name `[Fabel]` |
+| `display.showProvider` | boolean | false | Show provider label *before* the model, e.g. `[Bedrock \| Fabel]` |
+| `display.providerName` | string | `""` | Explicit provider label for `showProvider`; falls back to auto-detection |
+| `display.showAddedDirs` | boolean | true | Show `/add-dir` workspaces (e.g. `+sparkle`); max 5, basenames truncated to 24 chars |
+| `display.addedDirsLayout` | `inline` \| `line` | `inline` | `inline` (next to project, `+name`) or `line` (separate `Added dirs:` row) |
 | `display.showContextBar` | boolean | true | Show visual context bar `████░░░░░░` |
-| `display.contextValue` | `percent` \| `tokens` \| `remaining` \| `both` | `percent` | Context display format (`45%`, `45k/200k`, `55%` remaining, or `45% (45k/200k)`) |
-| `display.autoCompactWindow` | number \| `null` | `null` | When set to a positive number such as `200000`, compute the context percentage against this auto-compact window instead of the full model context window, matching the `/context` figure. Leave unset or `null` to preserve default full-window behavior. |
+| `display.contextValue` | `percent` \| `tokens` \| `remaining` \| `both` | `percent` | Context display format |
+| `display.autoCompactWindow` | number \| `null` | `null` | Context % computed against this auto-compact window when set (matches `/context`) |
 | `display.showConfigCounts` | boolean | false | Show CLAUDE.md, rules, MCPs, hooks counts |
-| `display.showCost` | boolean | false | Show session cost using Claude Code's native `cost.total_cost_usd` when available, with a local estimate fallback for direct Anthropic sessions |
-| `display.showOutputStyle` | boolean | false | Show the active Claude Code `outputStyle` from settings files as `style: <name>` |
+| `display.showCost` | boolean | false | Show session cost (native `cost.total_cost_usd` w/ local estimate fallback) |
+| `display.showOutputStyle` | boolean | false | Show active `outputStyle` as `style: <name>` |
 | `display.showDuration` | boolean | false | Show session duration `⏱️ 5m` |
 | `display.showSpeed` | boolean | false | Show output token speed `out: 42.1 tok/s` |
-| `display.showUsage` | boolean | true | Show Claude subscriber usage limits when available |
-| `display.usageValue` | `percent` \| `remaining` | `percent` | Usage display format (`25%` used, or `75%` remaining) |
-| `display.usageBarEnabled` | boolean | true | Display usage as visual bar instead of text |
-| `display.usageCompact` | boolean | false | Display usage in a shorter text form such as `5h: 25% (1h 30m)`; takes precedence over `display.usageBarEnabled` |
-| `display.showResetLabel` | boolean | true | Show the `resets in` prefix before usage countdowns |
-| `display.timeFormat` | `relative` \| `absolute` \| `both` \| `elapsed` \| `elapsedAndAbsolute` | `relative` | How usage-window time is shown: countdown only (`resets in 2h 30m`), wall-clock reset (`resets at 14:30`), both, elapsed window span (`1h 30m / 5h`), or elapsed plus wall-clock reset |
-| `display.sevenDayThreshold` | 0-100 | 80 | Show 7-day usage when >= threshold (0 = always) |
-| `display.externalUsagePath` | string | `""` | Optional absolute path to a local usage snapshot file. Relative paths are ignored. When stdin `rate_limits` are present, only `balance_label` is appended; when they are missing, valid usage windows can be used as a fallback |
-| `display.externalUsageWritePath` | string | `""` | Optional absolute `.json` path in an existing directory. When stdin `rate_limits` exists, ClaudeHUD writes a private snapshot for other local tools. Relative paths, non-json files, and missing parent directories are ignored |
-| `display.externalUsageFreshnessMs` | number | `300000` | Maximum allowed age for the external usage snapshot before it is ignored |
+| `display.showUsage` | boolean | true | Show subscriber usage limits when available |
+| `display.usageValue` | `percent` \| `remaining` | `percent` | Usage format: used or remaining |
+| `display.usageBarEnabled` | boolean | true | Show usage as visual bar |
+| `display.usageCompact` | boolean | false | Short text form `5h: 25% (1h 30m)`; overrides `usageBarEnabled` |
+| `display.showResetLabel` | boolean | true | Show `resets in` prefix before countdowns |
+| `display.timeFormat` | `relative` \| `absolute` \| `both` \| `elapsed` \| `elapsedAndAbsolute` | `relative` | How usage-window time is shown |
+| `display.sevenDayThreshold` | 0-100 | 80 | Show 7-day usage at ≥ threshold (`0` = always) |
+| `display.externalUsagePath` | string | `""` | Absolute path to a local usage snapshot (see [Provider Bridges](#provider-usage-bridges)) |
+| `display.externalUsageWritePath` | string | `""` | Write stdin rate_limits here for other local tools |
+| `display.externalUsageFreshnessMs` | number | `300000` | Max snapshot age before it is ignored |
 | `display.showTokenBreakdown` | boolean | true | Show token details at high context (85%+) |
 | `display.showTools` | boolean | false | Show tools activity line |
-| `display.showSkills` | boolean | false | Show active Skills detected from `Skill` tool invocations |
-| `display.showMcp` | boolean | false | Show active MCP servers detected from `mcp__server__tool` invocations |
-| `display.toolNameMaxLength` | number | `0` | Maximum displayed tool-name length. `0` keeps full names; MCP names may shorten to their final segment when truncating |
-| `display.toolsMaxVisible` | number | `4` | Maximum completed tools shown on the tools line. `0` means unlimited |
+| `display.showSkills` | boolean | false | Show active Skills |
+| `display.showMcp` | boolean | false | Show active MCP servers |
+| `display.toolNameMaxLength` | number | `0` | Max tool-name length (`0` = full) |
+| `display.toolsMaxVisible` | number | `4` | Max completed tools shown (`0` = unlimited) |
 | `display.showAgents` | boolean | false | Show agents activity line |
 | `display.showTodos` | boolean | false | Show todos progress line |
-| `display.showSessionName` | boolean | false | Show session slug or custom title from `/rename` |
-| `display.showAdvisor` | boolean | false | Inline the model configured via Claude Code's `/advisor` on the project line, e.g. `Advisor: Opus 4.7`. Read from the `advisorModel` field that Claude Code stamps on each assistant transcript record; sanitised and capped at 64 chars before rendering |
-| `display.advisorOverride` | string | `""` | Optional manual override for the displayed advisor label. When non-empty, replaces transcript-driven detection. Also sanitised and capped at 64 chars |
-| `display.showSessionStartDate` | boolean | false | Show the transcript session start timestamp |
-| `display.showLastResponseAt` | boolean | false | Show how long ago the last assistant response was written |
-| `display.showCompactions` | boolean | false | Show how many context compactions (manual `/compact` or auto) have occurred this session, counted from transcript `compact_boundary` entries, e.g. `Compactions: 2`. Hidden until the first compaction |
-| `display.showClaudeCodeVersion` | boolean | false | Show the installed Claude Code version, e.g. `CC v2.1.81` |
-| `display.showMemoryUsage` | boolean | false | Show an approximate system RAM usage line in expanded layout |
-| `display.showPromptCache` | boolean | false | Show a prompt cache countdown based on the last assistant response timestamp in the transcript |
-| `display.promptCacheTtlSeconds` | number | `300` | Prompt cache TTL in seconds. Keep the default for Pro, set `3600` for Max |
-| `colors.context` | color value | `green` | Base color for the context bar and context percentage |
-| `colors.usage` | color value | `brightBlue` | Base color for usage bars and percentages below warning thresholds |
-| `colors.warning` | color value | `yellow` | Warning color for context thresholds and usage warning text |
-| `colors.usageWarning` | color value | `brightMagenta` | Warning color for usage bars and percentages near their threshold |
-| `colors.critical` | color value | `red` | Critical color for limit-reached states and critical thresholds |
-| `colors.model` | color value | `cyan` | Color for the model badge such as `[Opus]` |
-| `colors.project` | color value | `yellow` | Color for the project path |
-| `colors.git` | color value | `magenta` | Color for git wrapper text such as `git:(` and `)` |
-| `colors.gitBranch` | color value | `cyan` | Color for the git branch and branch status text |
-| `colors.label` | color value | `dim` | Color for labels and secondary metadata such as `Context`, `Usage`, counts, and progress text |
-| `colors.custom` | color value | `208` | Color for the optional custom line |
-| `colors.barFilled` | string | `█` | Character used for the filled portion of progress bars |
-| `colors.barEmpty` | string | `░` | Character used for the empty portion of progress bars |
+| `display.showSessionName` | boolean | false | Show session slug/title from `/rename` |
+| `display.showAdvisor` | boolean | false | Inline the `/advisor` model on the project line |
+| `display.advisorOverride` | string | `""` | Manual advisor label override |
+| `display.showSessionStartDate` | boolean | false | Show transcript session start timestamp |
+| `display.showLastResponseAt` | boolean | false | Time since last assistant response |
+| `display.showCompactions` | boolean | false | Count of context compactions this session |
+| `display.showClaudeCodeVersion` | boolean | false | Show installed Claude Code version, e.g. `CC v2.1.81` |
+| `display.showMemoryUsage` | boolean | false | Show approximate system RAM usage (expanded only; may overstate real pressure) |
+| `display.showPromptCache` | boolean | false | Show prompt cache countdown (hidden until first assistant response) |
+| `display.promptCacheTtlSeconds` | number | `300` | Prompt cache TTL — `300` for Pro, `3600` for Max |
+| `colors.*` | color | — | Color for the matching element: `context`, `usage`, `warning`, `usageWarning`, `critical`, `model`, `project`, `git`, `gitBranch`, `label`, `custom` |
+| `colors.barFilled` / `colors.barEmpty` | string | `█` / `░` | Filled/empty progress-bar characters (single visible grapheme) |
 
-`colors.barFilled` and `colors.barEmpty` accept a single visible grapheme. Control characters, invisible format characters (bidi controls, zero-width joiners, variation selectors), line/paragraph separators, and noncharacters are rejected. Wide characters (emoji, CJK) may affect bar alignment depending on the terminal.
-
-Supported color names: `dim`, `red`, `green`, `yellow`, `magenta`, `cyan`, `brightBlue`, `brightMagenta`. You can also use a 256-color number (`0-255`) or hex (`#rrggbb`).
-
-`display.showMemoryUsage` is fully opt-in and only renders in `expanded` layout. It reports approximate system RAM usage from the local machine, not precise memory pressure inside Claude Code or a specific process. The number may overstate actual pressure because reclaimable OS cache and buffers can still be counted as used memory.
-
-`display.showCost` is fully opt-in. ClaudeHUD prefers the native `cost.total_cost_usd` field that Claude Code provides on stdin when it is available. If that field is absent or invalid for a direct Anthropic session, ClaudeHUD falls back to the existing local transcript-based estimate so the cost line still works on older payloads. The native field is absent before the first API response in a session, so the cost display may stay hidden until then. ClaudeHUD also keeps the cost hidden for known routed providers such as Bedrock and Vertex AI, because cloud-provider billed sessions may report `$0.00` or omit the field even though the session was not literally free.
-
-`display.showPromptCache` is fully opt-in. When enabled, ClaudeHUD looks at the timestamp of the last assistant response in the local transcript and shows a live countdown until the prompt cache expires. The default TTL is 5 minutes (`300` seconds). Set `display.promptCacheTtlSeconds` to `3600` if you want a 1-hour Max-style window. If the transcript does not have an assistant timestamp yet, the cache element stays hidden.
+Supported color values: `dim`, `red`, `green`, `yellow`, `magenta`, `cyan`, `brightBlue`, `brightMagenta`, a 256-color number (`0-255`), or hex (`#rrggbb`).
 
 ### Usage Limits
 
-Usage display is **enabled by default** when Claude Code provides subscriber `rate_limits` data on stdin. It shows your rate limit consumption on line 2 alongside the context bar.
+Usage display is **enabled by default** when Claude Code provides subscriber `rate_limits` on stdin (shown on line 2 alongside the context bar). It is not available for API-key-only sessions or for managed providers like Bedrock/Vertex (where billing lives elsewhere).
 
-Set `display.usageValue` to `remaining` to show quota left instead of quota used. Warning colors and 7-day threshold checks still use the underlying used percentage.
+- `display.usageValue` — `percent` (used) or `remaining`
+- `display.timeFormat` — countdown, wall-clock, elapsed span, or combinations
+- `display.sevenDayThreshold` — weekly window appears above this (default 80; `0` always shows)
+- `display.usageCompact` / `display.showResetLabel` — shorter text forms
+- Free/weekly-only accounts render the weekly window alone (no ghost `5h: --`)
 
-ClaudeHUD prefers the official statusline stdin payload for rate-limit windows. If `display.externalUsagePath` points to a fresh local sidecar snapshot, ClaudeHUD can append its `balance_label` alongside stdin windows. If stdin `rate_limits` are missing, the same snapshot can provide fallback usage windows.
-
-The fallback snapshot path must be absolute. The snapshot must be fresh enough (`display.externalUsageFreshnessMs`) and include valid `updated_at`, plus a `five_hour` window, `seven_day` window, or `balance_label`. `balance_label` is optional text for prepaid provider balances; it is trimmed, length-limited, and sanitized before display. Relative paths, invalid JSON, stale files, or invalid timestamps are ignored quietly.
-
-Set `display.externalUsageWritePath` if you want ClaudeHUD to write the official stdin `rate_limits` into a local snapshot for other tools. The path must be absolute, end in `.json`, and live in an existing directory. ClaudeHUD writes the file with private permissions and ignores invalid paths quietly.
-
-Free/weekly-only accounts render the weekly window by itself instead of showing a ghost `5h: --` placeholder.
-
-The 7-day percentage appears when above the `display.sevenDayThreshold` (default 80%):
-
-```
-Context █████░░░░░ 45% │ Usage ██░░░░░░░░ 25% (1h 30m / 5h) | ██████████ 85% (2d / 7d)
-```
-
-To disable, set `display.showUsage` to `false`.
-
-Reset times use relative countdowns by default. Set `display.timeFormat` to `absolute` for wall-clock
-times, `both` to show both forms, `elapsed` to show how far through each usage window you are, or
-`elapsedAndAbsolute` to show elapsed window progress plus the wall-clock reset time. This setting is
-manual-only today; `/claude-hud:configure` preserves it without editing it.
-
-Set `display.showResetLabel` to `false` if you want shorter usage countdowns such as `(3h 17m)` instead of `(resets in 3h 17m)`.
-
-Set `display.usageCompact` to `true` if you want the shorter usage-only form, for example `5h: 25% (1h 30m)`. Compact usage takes precedence over `display.usageBarEnabled`.
+A fresh local snapshot at `display.externalUsagePath` can append a `balance_label`, or — if stdin `rate_limits` are missing — provide fallback usage windows entirely. This is how the provider bridges below feed usage into the HUD.
 
 ### Security Notes
 
-ClaudeHUD is local-only by design. It does not make network requests, scrape credentials, or call undocumented Claude APIs. It reads the statusline JSON from stdin, the current session transcript path supplied by Claude Code, selected Claude configuration files under `~/.claude`, and git metadata for the current workspace.
+ClaudeHUD is **local-only by design**: it reads the statusline JSON from stdin, the session transcript, selected `~/.claude` config files, and git metadata. It makes no network requests and calls no undocumented APIs. Cache files are written with private permissions on POSIX.
 
-HUD cache files are written under `~/.claude/plugins/claude-hud` with private permissions on POSIX filesystems. The cache stores derived display metadata such as context percentages, token counters, activity names, and the resolved Claude Code version.
-
-`--extra-cmd` is disabled unless `CLAUDE_HUD_ALLOW_EXTRA_CMD=1` (or `true`, `yes`, `on`) is present in the HUD process environment. Treat this option as arbitrary code execution: it runs the supplied shell command with your user privileges on statusline refreshes. Do not use commands copied from untrusted sources.
-
-**Requirements:**
-- Claude Code must include subscriber `rate_limits` data on stdin for the current session
-- Not available for API-key-only users
-
-**Troubleshooting:** If usage doesn't appear:
-- Ensure you're logged in with a Claude subscriber account (not API key)
-- Check `display.showUsage` is not set to `false` in config
-- API users see no usage display (they have pay-per-token, not rate limits)
-- AWS Bedrock models display `Bedrock` and hide usage limits (usage is managed in AWS)
-- Google Vertex AI models display `Vertex` and hide cost estimates (pricing differs from Anthropic direct)
-- Claude Code may leave `rate_limits` empty until after the first model response in a session
-- Some Claude Code builds and subscription tiers may still omit `rate_limits`, even after the first response
-- If you configured `display.externalUsagePath`, ClaudeHUD will try that local snapshot before hiding usage
-- ClaudeHUD never falls back to credential scraping or undocumented API calls
-
-Example fallback snapshot:
-
-```json
-{
-  "updated_at": "2026-04-20T12:00:00.000Z",
-  "five_hour": {
-    "used_percentage": 42,
-    "resets_at": "2026-04-20T15:00:00.000Z"
-  },
-  "seven_day": {
-    "used_percentage": 84,
-    "resets_at": "2026-04-27T12:00:00.000Z"
-  }
-}
-```
+`--extra-cmd` is disabled unless `CLAUDE_HUD_ALLOW_EXTRA_CMD=1` is set in the HUD process environment. Treat it as arbitrary code execution — never use commands from untrusted sources.
 
 ### Example Configuration
 
 ```json
 {
-  "language": "zh",
   "lineLayout": "expanded",
-  "pathLevels": 2,
-  "elementOrder": ["project", "tools", "skills", "mcp", "context", "usage", "memory", "environment", "agents", "todos", "sessionTime"],
+  "showSeparators": false,
+  "language": "en",
   "gitStatus": {
     "enabled": true,
     "showDirty": true,
-    "showAheadBehind": true,
-    "showFileStats": true
+    "showAheadBehind": false,
+    "showFileStats": false
   },
   "display": {
+    "showModel": true,
+    "showContextBar": true,
     "showTools": true,
     "showSkills": true,
     "showMcp": true,
     "showAgents": true,
     "showTodos": true,
-    "showConfigCounts": true,
-    "showDuration": true,
-    "showMemoryUsage": true
-  },
-  "colors": {
-    "context": "cyan",
-    "usage": "cyan",
-    "warning": "yellow",
-    "usageWarning": "magenta",
-    "critical": "red",
-    "model": "cyan",
-    "project": "yellow",
-    "git": "magenta",
-    "gitBranch": "cyan",
-    "label": "dim",
-    "custom": "#FF6600"
+    "showProject": true,
+    "showAddedDirs": true,
+    "showUsage": true,
+    "showOutputStyle": true,
+    "showCompactions": true,
+    "showAdvisor": true,
+    "externalUsagePath": "C:/Users/.claude/<provider>-usage-snapshot.json"
   }
 }
 ```
 
 ### Display Examples
 
-**1 level (default):** `[Opus] │ my-project git:(main)`
+**1 level (default):** `[Fabel] │ my-project git:(main)`
 
-**2 levels:** `[Opus] │ apps/my-project git:(main)`
+**2 levels:** `[Fabel] │ apps/my-project git:(main)`
 
-**3 levels:** `[Opus] │ dev/apps/my-project git:(main)`
+**3 levels:** `[Fabel] │ dev/apps/my-project git:(main)`
 
-**With dirty indicator:** `[Opus] │ my-project git:(main*)`
+**With dirty indicator:** `[Fabel] │ my-project git:(main*)`
 
-**With ahead/behind:** `[Opus] │ my-project git:(main ↑2 ↓1)`
+**With ahead/behind:** `[Fabel] │ my-project git:(main ↑2 ↓1)`
 
-**With file stats:** `[Opus] │ my-project git:(main* !3 +1 ?2)`
+**With file stats:** `[Fabel] │ my-project git:(main* !3 +1 ?2)`
 - `!` = modified files, `+` = added/staged, `✘` = deleted, `?` = untracked
 - Counts of 0 are omitted for cleaner display
 
 ### Disabling the HUD Temporarily
 
-Set the `CLAUDE_HUD_DISABLE` environment variable to launch a session without the HUD — no need to remove the `statusLine` entry from `settings.json`:
+Set the `CLAUDE_HUD_DISABLE` environment variable — no need to edit `settings.json`:
 
 ```bash
 CLAUDE_HUD_DISABLE=1 claude
 ```
 
-Leaving it unset (or setting an explicit negative: `0`, `false`, `off`, `no`) keeps the HUD enabled. When disabled, the HUD exits immediately without reading the transcript or running git, so the statusline simply stays empty for that session.
-
-### Troubleshooting
-
-**Config not applying?**
-- Check for JSON syntax errors: invalid JSON silently falls back to defaults
-- Ensure valid values: `pathLevels` must be 1, 2, or 3; `lineLayout` must be `expanded` or `compact`; `maxWidth` must be a positive number
-- Delete config and run `/claude-hud:configure` to regenerate
-
-**Git status missing?**
-- Verify you're in a git repository
-- Check `gitStatus.enabled` is not `false` in config
-
-**Tool/skill/MCP/agent/todo lines missing?**
-- These are hidden by default — enable with `showTools`, `showSkills`, `showMcp`, `showAgents`, `showTodos` in config
-- They also only appear when there's activity to show
-
-**HUD not appearing after setup?**
-- Restart Claude Code so it picks up the new statusLine config
-- On macOS, fully quit Claude Code and run `claude` again in your terminal
-- Make sure `CLAUDE_HUD_DISABLE` is not set in your environment (e.g. exported from a shell profile) — it silences the HUD entirely, including setup verification
-
 ---
 
-## GLM / BigModel Usage Bridge
+## CN Model Provider Usage Bridges
 
-When you run Claude Code through a GLM (Zhipu AI / BigModel) proxy such as `glm-5.2`, the proxy does not emit Anthropic-style `rate_limits` on the statusline stdin, so the Usage line stays empty. The bundled `src/providers/glm/` module bridges this gap: a standalone poller queries the BigModel quota API on a timer and writes a local usage snapshot that Claude HUD reads.
+When you run Claude Code through a **non-Anthropic provider proxy** (GLM/BigModel, MiniMax, Alibaba/Qwen, Kimi/Moonshot), the proxy does **not** emit Anthropic-style `rate_limits` on the statusline stdin, so the Usage line stays empty. Claude HUD ships a **bridge** for each: a standalone background poller that queries the vendor's quota API on a timer and writes a local snapshot the HUD reads.
 
-**Architecture:** the poller is a separate, long-lived process; the HUD's statusline process stays local-only (it only reads the snapshot, never makes network calls). The poller uses only Node 18+ built-ins (`fs` / `os` / global `fetch`) — zero npm dependencies.
+### How it works
 
-### Install Claude HUD from this fork
+The bridge is **decoupled** — the short-lived statusline process (re-invoked every ~300ms) never makes network calls; it only reads a local JSON snapshot. A separate, long-lived poller daemon does all the API work:
 
 ```
-/plugin marketplace add tsungseu/claude-hud-advanced
-/plugin install claude-hud
+┌──────────────────────┐  atomic JSON write  ┌─────────────────────────┐  read   ┌──────────────┐
+│  Provider poller     │ ──────────────────> │ ~/.claude/<p>-snapshot  │ ──────> │ claude-hud   │
+│  long-lived daemon   │                     │ .json  (0600)           │         │ statusline   │
+│  polls vendor API    │                     │                         │         │ (renders bar)│
+│  every ~5 min        │                     │  shared snapshot file   │         │              │
+└──────────────────────┘                     └─────────────────────────┘         └──────────────┘
 ```
 
-### Configure the API key (any one; highest priority first)
+**Shared snapshot contract** — every poller writes (and the HUD reads) this shape:
 
-- `GLM_API_KEY` env var, **or**
-- `apiKey` in `src/providers/glm/config.json` (copy from `src/providers/glm/config.example.json`), **or**
-- auto-detected from `~/.claude/settings.json` `env` when `ANTHROPIC_BASE_URL` points at `bigmodel` (reuses `ANTHROPIC_AUTH_TOKEN`)
-
-### Weekly / long-period quota (optional)
-
-GLM also exposes a long-period window (`TIME_LIMIT`, ~18-day cycle) alongside the short `TOKENS_LIMIT` (~5h, used for the Usage bar). To render it as claude-hud's weekly row, set in `src/providers/glm/config.json`:
-
-```json
-{ "weeklyLimitType": "TIME_LIMIT" }
+```jsonc
+{
+  "updated_at": "2026-07-03T12:00:00Z",
+  "five_hour": { "used_percentage": 0-100, "resets_at": "ISO8601" },   // the Usage bar
+  "seven_day":  { "used_percentage": 0-100, "resets_at": "ISO8601" },  // optional weekly row
+  "balance_label": "¥6.35"                                             // optional prepaid balance
+}
 ```
 
-The poller then mirrors that window into the snapshot's `seven_day`. To actually **show** the row, also lower claude-hud's threshold in `~/.claude/plugins/claude-hud/config.json`:
+The HUD treats the snapshot as valid only when fresh (`display.externalUsageFreshnessMs`, default 5 min) and with valid timestamps; relative/invalid JSON is ignored quietly. Pollers write **atomically** (temp file + `rename` + `0600` perms), so an API failure never overwrites a good snapshot with bad data — the next cycle recovers.
 
-```json
-{ "display": { "sevenDayThreshold": 0 } }
-```
+**Zero dependencies** — each poller is a single `.mjs` using only Node 18+ built-ins (`fs`, `os`, global `fetch`). No npm install, no extra runtime.
 
-(default 80 hides it unless usage ≥ 80%; `0` always shows it.)
+**API key auto-detection** (highest priority first):
+1. Vendor env var (e.g. `GLM_API_KEY`)
+2. `apiKey` in `src/providers/<name>/config.json` (copy from `config.example.json`)
+3. Auto-detected from `~/.claude/settings.json` — `ANTHROPIC_AUTH_TOKEN` is reused **only when `ANTHROPIC_BASE_URL` points at that vendor**, so a real Anthropic credential is never leaked to a Chinese endpoint.
 
-> Caveat: claude-hud labels this row `7d` / `weekly` and, under `timeFormat: "elapsed"`, computes elapsed against a fixed 7-day window — so for GLM's ~18-day cycle the **percentage is correct but the elapsed-time span and label are approximate**. Set `timeFormat` to `relative` if you want the reset countdown (`resets in 18d`) to be exact.
+**Proxy-aware fetch** — Node's built-in `fetch` ignores `HTTP(S)_PROXY`. The shared `src/providers/shared/proxy-fetch.mjs` implements an HTTP CONNECT tunnel (with TLS over the socket and Basic proxy auth), honoring `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY`.
 
-### Run the poller
+**Auto-start** — `plugin.json` registers a `SessionStart` hook that runs each poller with `--ensure`. Using a PID file, `--ensure` launches a detached daemon only if one isn't already running (idempotent across sessions), then returns immediately so it never blocks session start. The daemon survives the session ending; after a machine reboot it relaunches on the next Claude Code session — no systemd/launchd/NSSM setup needed.
 
-```bash
-npm run glm:poll        # loop, every 5 min by default
-npm run glm:poll:once   # single fetch, for verifying the key
-```
+### Supported providers
 
-### Point the HUD at the snapshot
+| Provider | API endpoint | Auth | Env var | Default snapshot | Run |
+|----------|--------------|------|---------|-------------------|-----|
+| **GLM / BigModel** (Zhipu) | `GET open.bigmodel.cn/api/monitor/usage/quota/limit` | `Authorization: <key>` (no Bearer) | `GLM_API_KEY` | `~/.claude/glm-usage-snapshot.json` | `npm run glm:poll` |
+| **MiniMax** | `GET api.minimaxi.com/.../coding_plan/remains` (CN) or `api.minimax.io` (EN) | `Authorization: Bearer <key>` | `MINIMAX_API_KEY` | `~/.claude/minimax-usage-snapshot.json` | `npm run minimax:poll` |
+| **Alibaba / Bailian** | `POST {gateway}/data/api.json` (intl + cn gateways, auto-fallback) | `Bearer` + `x-api-key` + `X-Dashscope-API-Key` | `ALIBABA_API_KEY` / `DASHSCOPE_API_KEY` | `~/.claude/alibaba-usage-snapshot.json` | `npm run alibaba:poll` |
+| **Kimi / Moonshot** | `GET {baseURL}/coding/v1/usages` (default `api.kimi.com`) | `Authorization: Bearer <key>` | `KIMI_CODE_API_KEY` | `~/.claude/kimi-usage-snapshot.json` | `npm run kimi:poll` |
 
-In `~/.claude/plugins/claude-hud/config.json`:
+> Append `:once` (e.g. `npm run glm:poll:once`) for a single fetch to verify your key. Each poller has a `config.example.json` documenting `apiKey`, `intervalSec`, `snapshotPath`, and provider-specific options (GLM `weeklyLimitType`, MiniMax/Alibaba `region`, Kimi `baseURL`).
+
+### Usage
+
+1. **Provide an API key** — any one of: the env var, `config.json` `apiKey`, or auto-detected from `settings.json` (works automatically if `ANTHROPIC_BASE_URL` already points at the vendor).
+2. **Install & restart** — after `/plugin install claude-hud`, the next Claude Code session auto-starts whichever pollers have a resolved key.
+3. **Point the HUD at the snapshot** in `~/.claude/plugins/claude-hud/config.json`:
 
 ```json
 {
   "display": {
     "externalUsagePath": "/absolute/path/to/glm-usage-snapshot.json",
+    "sevenDayThreshold": 0,
     "timeFormat": "elapsed"
   }
 }
 ```
 
-`timeFormat: "elapsed"` renders the trailing time as elapsed / window span, e.g. `(1h 30m / 5h)`. With the poller running you get:
+- `sevenDayThreshold: 0` shows the weekly window unconditionally (default 80 hides it).
+- `timeFormat: "elapsed"` renders the Usage bar as `25% (1h 30m / 5h)`.
 
-```
-Usage ██░░░░░░░░ 25% (1h 30m / 5h)
-```
-
-### Automatic start via SessionStart hook
-
-This fork ships a `SessionStart` hook (see `plugin.json`) that runs `src/providers/glm/poller.mjs --ensure` whenever a Claude Code session opens. In `--ensure` mode the poller checks a PID file and launches a **detached, long-lived** instance only if one isn't already running — idempotent across sessions.
-
-Result: after `/plugin install`, the next Claude Code session auto-starts the poller, which then runs in the background (and survives the session ending). No systemd / launchd / NSSM setup needed.
-
-Caveat: a detached process does **not** survive a machine reboot — it relaunches on the next Claude Code session. That is the intended model: open Claude Code and the poller comes back on its own, with no per-platform service setup required.
-
-### Troubleshooting
-
-If the Usage line is missing:
-1. Is the poller running? (`systemctl --user status glm-poller` / `launchctl list | grep glm` / `sc query glm-poller`)
-2. Is the snapshot fresh? `updated_at` must be within `externalUsageFreshnessMs` (default 5 min); stale snapshots are hidden.
-3. Is `externalUsagePath` an absolute path? (Windows backslashes must be escaped.)
-4. If a Claude subscriber `rate_limits` is present, it takes precedence and the external snapshot is not shown.
-
-On poller error the old snapshot is preserved (failure-tolerant); the next cycle recovers automatically.
-
-### Security
-
-`src/providers/glm/config.json` is git-ignored. The poller sends the full key in the `Authorization` header (no `Bearer` prefix — BigModel convention) only to `https://open.bigmodel.cn`. The snapshot is written atomically with `0o600` permissions and contains only percentages and reset timestamps — never the key.
-
----
-
-## MiniMax Usage Bridge
-
-A second bundled provider bridge under `src/providers/minimax/`, same shape as the GLM one: a standalone poller queries the MiniMax coding-plan quota API and writes a snapshot claude-hud reads. Useful when you run Claude Code through a MiniMax coding plan.
-
-- **Endpoint**: `GET https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains` (CN) or `https://api.minimax.io/...` (EN) — chosen by `region` (`"cn"` default).
-- **Auth**: `Authorization: Bearer <api key>`.
-- **What it writes**: parses `model_remains["general"]` into `five_hour` (interval bucket) and `seven_day` (weekly bucket, only when `current_weekly_status == 1`). MiniMax returns remaining%, inverted to used%.
-
-### Configure
-
-Same three key sources as GLM (highest priority first): `MINIMAX_API_KEY` env > `apiKey` in `src/providers/minimax/config.json` > auto-detected from `~/.claude/settings.json` when `ANTHROPIC_BASE_URL` points at MiniMax. Region is auto-detected too (`minimax.io` → EN, else CN).
-
-### Run
-
-```bash
-npm run minimax:poll        # loop
-npm run minimax:poll:once   # single fetch
-```
-
-Auto-starts via the same `SessionStart` hook (the `--ensure` runs both GLM and MiniMax; whichever has a resolved key daemonizes, the other skips silently).
-
-### Point claude-hud at it
-
-When you're on a MiniMax provider, set `externalUsagePath` to the MiniMax snapshot (default path `~/.claude/minimax-usage-snapshot.json`):
-
-```json
-{ "display": { "externalUsagePath": "/absolute/path/to/minimax-usage-snapshot.json" } }
-```
-
-To show the weekly row, also set `display.sevenDayThreshold: 0` (see GLM section for the elapsed-time caveat — it applies the same way).
-
----
-
-## Other Provider Bridges (Alibaba / Kimi)
-
-Two more bundled bridges under `src/providers/`, same shape as GLM/MiniMax:
-
-### Alibaba (Bailian coding plan)
-
-- **Auth**: API key (Bearer + `x-api-key` + `X-DashScope-API-Key`). The cookie/web-session path is intentionally not ported.
-- **Region**: `intl` (modelstudio.console.alibabacloud.com) or `cn` (bailian.console.aliyun.com); auto-falls back to the other region on retryable failures.
-- **Snapshot**: `~/.claude/alibaba-usage-snapshot.json`; writes `five_hour` + `seven_day` (monthly window dropped — claude-hud has no slot for it).
-- **Key**: `ALIBABA_API_KEY` / `DASHSCOPE_API_KEY` env > `config.json` `apiKey` > settings.json auto-detect.
-
-```bash
-npm run alibaba:poll        # loop
-npm run alibaba:poll:once   # single fetch
-```
-
-### Kimi (Moonshot Code API)
-
-- **Auth**: Kimi **Code API key** (Bearer). Web/JWT path not ported.
-- **Endpoint**: `GET {baseURL}/coding/v1/usages` (baseURL default `https://api.kimi.com`).
-- **Snapshot**: `~/.claude/kimi-usage-snapshot.json`; `response.usage` (weekly) → `seven_day`, `response.limits[0]` (5h rate limit) → `five_hour`.
-- **Key**: `KIMI_CODE_API_KEY` env > `config.json` `apiKey` > settings.json auto-detect.
-
-```bash
-npm run kimi:poll        # loop
-npm run kimi:poll:once   # single fetch
-```
-
-Both auto-start via the `SessionStart` hook (whichever resolves a key daemonizes). When you switch providers, point `display.externalUsagePath` at the matching snapshot and set `display.sevenDayThreshold: 0` to show the weekly row (same elapsed-approximation caveat as GLM).
+Switching providers is just changing `externalUsagePath` to the matching snapshot.
 
 ---
 
