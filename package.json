@@ -1,7 +1,7 @@
 {
   "name": "claude-hud",
   "version": "0.3.0",
-  "description": "Real-time statusline HUD for Claude Code",
+  "description": "Real-time statusline HUD for Claude Code, with coding-plan quota polling for GLM/MiniMax/Alibaba/Kimi.",
   "type": "module",
   "main": "dist/index.js",
   "files": [
@@ -31,7 +31,7 @@
     "statusline",
     "hud"
   ],
-  "author": "Jarrod Watts",
+  "author": "Tsungseu",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"

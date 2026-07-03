@@ -1,10 +1,10 @@
 {
   "name": "claude-hud",
-  "description": "Real-time statusline HUD for Claude Code - context health, tool activity, agent tracking, and todo progress",
+  "description": "Real-time statusline HUD for Claude Code, with coding-plan quota polling for GLM/MiniMax/Alibaba/Kimi.",
   "version": "0.3.0",
   "author": {
-    "name": "Jarrod Watts",
-    "url": "https://github.com/jarrodwatts"
+    "name": "Tsungseu",
+    "url": "https://github.com/tsungseu"
   },
   "commands": [
     "./commands/setup.md",
