@@ -1,0 +1,112 @@
+{
+  "name": "claude-hud-vscode",
+  "displayName": "Claude HUD",
+  "description": "Context & model-call usage for Claude Code, surfaced as a VSCode status bar item with a click-through detail panel. Mirrors the claude-hud terminal statusline experience.",
+  "version": "0.1.0",
+  "publisher": "tsungseu",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tsungseu/claude-hud-advanced.git",
+    "directory": "vscode-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/tsungseu/claude-hud-advanced/issues"
+  },
+  "homepage": "https://github.com/tsungseu/claude-hud-advanced/tree/main/vscode-extension",
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "claude-code",
+    "claude",
+    "usage",
+    "context",
+    "hud",
+    "statusline"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeHud.showDetail",
+        "title": "Claude HUD: Show Detail Panel",
+        "category": "Claude HUD"
+      },
+      {
+        "command": "claudeHud.refresh",
+        "title": "Claude HUD: Refresh Now",
+        "category": "Claude HUD"
+      },
+      {
+        "command": "claudeHud.selectProvider",
+        "title": "Claude HUD: Select Usage Provider",
+        "category": "Claude HUD"
+      }
+    ],
+    "configuration": {
+      "title": "Claude HUD",
+      "properties": {
+        "claudeHud.contextWindowSize": {
+          "type": "number",
+          "default": 0,
+          "description": "Context window size in tokens. 0 = auto-detect from CLAUDE_CODE_AUTO_COMPACT_WINDOW / model id suffix (recommended). Set explicitly only if auto-detection is wrong."
+        },
+        "claudeHud.modelLabel": {
+          "type": "string",
+          "default": "",
+          "description": "Override the model display name. When empty, the provider is inferred from ANTHROPIC_BASE_URL in ~/.claude/settings.json."
+        },
+        "claudeHud.hudEntryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to claude-hud's dist/index.js. When empty, the newest installed plugin version is auto-detected via version-glob."
+        },
+        "claudeHud.snapshotFreshnessMs": {
+          "type": "number",
+          "default": 600000,
+          "minimum": 0,
+          "description": "Max age (ms) of a provider usage snapshot before it is considered stale."
+        },
+        "claudeHud.refreshIntervalMs": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 500,
+          "description": "Status bar / detail panel refresh interval in milliseconds."
+        },
+        "claudeHud.provider": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "glm",
+            "minimax",
+            "alibaba",
+            "kimi"
+          ],
+          "default": "auto",
+          "description": "Which provider usage snapshot to read. 'auto' probes for the first existing snapshot file."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs --production",
+    "watch": "node esbuild.config.mjs --watch",
+    "package": "node esbuild.config.mjs --production && vsce package --no-dependencies",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}
