@@ -114,6 +114,7 @@
   "scripts": {
     "build": "node esbuild.config.mjs --production",
     "watch": "node esbuild.config.mjs --watch",
+    "test": "esbuild test/*.test.ts --bundle --format=cjs --platform=node --outdir=out --log-level=warning && node --test out/*.test.js",
     "package": "node esbuild.config.mjs --production && vsce package --no-dependencies",
     "typecheck": "tsc --noEmit"
   },
