@@ -33,6 +33,16 @@ export interface SessionTokens {
   cacheReadTokens: number;
 }
 
+/** One hour's accumulated token usage, for the per-hour usage chart. */
+export interface HourlyBucket {
+  /** Hour key, ISO truncated to the hour: YYYY-MM-DDTHH:00:00.000Z */
+  hour: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** cache_creation + cache_read combined into one layer. */
+  cacheTokens: number;
+}
+
 export type SnapshotStatus = 'fresh' | 'stale' | 'missing';
 
 export interface ProviderUsage {
@@ -218,6 +228,89 @@ export function readSessionTokenTotals(transcriptPath: string): SessionTokens | 
     totals.cacheReadTokens += crT;
   }
   return seenAny ? totals : null;
+}
+
+/**
+ * Read ALL transcripts under a project dir and bucket assistant-turn token
+ * usage by hour, keeping only the last 24h. Consecutive duplicate usage
+ * blocks are skipped (same dedup as readSessionTokenTotals). Returns buckets
+ * sorted ascending by hour; empty array if the dir is missing/empty.
+ *
+ * `projectDir` is the encoded ~/.claude/projects/<encoded-cwd> path.
+ */
+export function readHourlyUsage(projectDir: string, now: number): HourlyBucket[] {
+  let files: string[];
+  try {
+    files = fs.readdirSync(projectDir).filter((f) => f.endsWith('.jsonl'));
+  } catch {
+    return [];
+  }
+
+  const windowStart = now - 24 * 60 * 60 * 1000;
+  const buckets = new Map<string, HourlyBucket>();
+
+  for (const name of files) {
+    const full = path.join(projectDir, name);
+    let raw: string;
+    try {
+      raw = fs.readFileSync(full, 'utf8');
+    } catch {
+      continue;
+    }
+    let lastKey: string | undefined;
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line || !line.trim()) {
+        lastKey = undefined;
+        continue;
+      }
+      let entry: { type?: string; timestamp?: string; message?: { usage?: Record<string, unknown> } };
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        lastKey = undefined;
+        continue;
+      }
+      if (entry.type !== 'assistant' || !entry.timestamp) {
+        lastKey = undefined;
+        continue;
+      }
+      const usage = entry.message?.usage;
+      if (!usage) {
+        lastKey = undefined;
+        continue;
+      }
+
+      const ts = Date.parse(entry.timestamp);
+      if (!Number.isFinite(ts) || ts < windowStart) {
+        lastKey = undefined;
+        continue;
+      }
+
+      const inT = normalizeToken(usage.input_tokens);
+      const outT = normalizeToken(usage.output_tokens);
+      const ccT = normalizeToken(usage.cache_creation_input_tokens);
+      const crT = normalizeToken(usage.cache_read_input_tokens);
+      const key = `${inT}|${outT}|${ccT}|${crT}`;
+      if (key === lastKey) continue;
+      lastKey = key;
+
+      // Truncate to the hour: YYYY-MM-DDTHH:00:00.000Z
+      const d = new Date(ts);
+      d.setUTCMinutes(0, 0, 0);
+      const hour = d.toISOString();
+
+      let b = buckets.get(hour);
+      if (!b) {
+        b = { hour, inputTokens: 0, outputTokens: 0, cacheTokens: 0 };
+        buckets.set(hour, b);
+      }
+      b.inputTokens += inT;
+      b.outputTokens += outT;
+      b.cacheTokens += ccT + crT;
+    }
+  }
+
+  return Array.from(buckets.values()).sort((a, b) => a.hour.localeCompare(b.hour));
 }
 
 /** Per-million-token price in yuan for a model, used for cost estimation. */
