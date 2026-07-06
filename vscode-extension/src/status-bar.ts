@@ -1,11 +1,29 @@
 // Owns the always-visible status bar item and the periodic snapshot collection.
 // The detail panel subscribes via onDidUpdate to ride on the same refresh cadence.
+//
+// The status bar text uses a state-aware leading codicon ($(pulse) normal,
+// $(warning) near limit, $(error) at limit, $(clock) snapshot stale) as the
+// "status overlay indicator" on the bar icon. Hovering shows the full dashboard
+// tooltip (GFM tables).
 import * as vscode from 'vscode';
 import { collectHudSnapshot, HudSnapshot } from './usage-data';
 import { resolveActiveTranscript } from './transcript-resolver';
 import { readSettings } from './config';
-import { contextLevel, quotaLevel, statusColor } from './thresholds';
-import { renderBar, renderPercent, renderResetCountdown } from './bar';
+import { statusColor } from './thresholds';
+import {
+  renderBar,
+  renderPercent,
+  renderCountdownShort,
+  renderResetCountdown,
+  formatTokens,
+  contextLevel,
+  quotaLevel,
+  levelCodicon,
+  statusCodicon,
+  Level,
+} from './bar';
+
+const TOOLTIP_BAR_WIDTH = 10;
 
 export class StatusBarManager {
   private readonly item: vscode.StatusBarItem;
@@ -26,7 +44,6 @@ export class StatusBarManager {
     this.stop();
     const settings = readSettings();
     const interval = Math.max(500, settings.refreshIntervalMs);
-    // Fire immediately, then on the interval.
     this.refresh();
     this.timer = setInterval(() => this.refresh(), interval);
   }
@@ -38,12 +55,10 @@ export class StatusBarManager {
     }
   }
 
-  /** Force an immediate refresh (e.g. from the Refresh command). */
   refreshNow(): void {
     this.refresh();
   }
 
-  /** The most recently collected snapshot (null until the first tick completes). */
   get latest(): HudSnapshot | null {
     return this.last;
   }
@@ -71,6 +86,7 @@ export class StatusBarManager {
       modelLabelOverride: settings.modelLabel,
       providerSetting: settings.provider,
       snapshotFreshnessMs: settings.snapshotFreshnessMs,
+      pricing: settings.pricing,
       transcriptMatchStrategy: matchStrategy,
     });
 
@@ -80,29 +96,28 @@ export class StatusBarManager {
   }
 
   private render(snapshot: HudSnapshot): void {
-    // No workspace or no transcript: idle state.
     if (!snapshot.workspaceFolder || !snapshot.transcriptPath) {
       this.renderIdle();
       return;
     }
 
-    // Compact bars for the status bar: keep them short since the cell is narrow.
-    // Mirrors claude-hud's `Context ████░░░░░░ 41% │ Usage ██░░░░░░░░ 23%` style.
+    const usagePct = snapshot.usage?.fiveHourPercent ?? snapshot.usage?.sevenDayPercent ?? null;
+    const overallLevel = overallStatusLevel(snapshot);
+
+    // Leading codicon doubles as the status overlay indicator.
+    const prefix = leadingCodicon(snapshot, overallLevel);
+
     const ctxBar = renderBar(snapshot.contextPercent, 8);
     const ctxPct = renderPercent(snapshot.contextPercent);
 
-    const usage = snapshot.usage;
-    const usagePct = usage?.fiveHourPercent ?? usage?.sevenDayPercent ?? null;
-
-    let text = `$(pulse) ${ctxBar} ${ctxPct}`;
+    let text = `${prefix} ${ctxBar} ${ctxPct}`;
 
     if (usagePct !== null) {
       const usageBar = renderBar(usagePct, 8);
-      const usagePctStr = renderPercent(usagePct);
-      const reset = renderResetCountdown(usage?.fiveHourResetAt ?? usage?.sevenDayResetAt ?? null);
-      text += `  │  ${usageBar} ${usagePctStr}` + (reset ? ` (${reset})` : '');
-    } else if (usage?.balanceLabel) {
-      text += `  │  ${usage.balanceLabel}`;
+      const reset = renderResetCountdown(snapshot.usage?.fiveHourResetAt ?? snapshot.usage?.sevenDayResetAt ?? null);
+      text += `  │  ${usageBar} ${renderPercent(usagePct)}` + (reset ? ` (${reset})` : '');
+    } else if (snapshot.usage?.balanceLabel) {
+      text += `  │  ${snapshot.usage.balanceLabel}`;
     } else {
       text += `  │  —`;
     }
@@ -112,15 +127,8 @@ export class StatusBarManager {
     this.item.backgroundColor = undefined;
     this.item.color = undefined;
 
-    // Highlight on the most urgent of context/usage levels. critical > warn.
-    const usagePctForLevel = snapshot.usage?.fiveHourPercent ?? snapshot.usage?.sevenDayPercent ?? null;
-    const levels = [contextLevel(snapshot.contextPercent), quotaLevel(usagePctForLevel)];
-    const level = levels.includes('critical')
-      ? 'critical'
-      : levels.includes('warn')
-        ? 'warn'
-        : 'ok';
-    const bg = statusColor(level);
+    // Background highlight on the most urgent level (critical > warn).
+    const bg = statusColor(overallLevel);
     if (bg) {
       this.item.backgroundColor = new vscode.ThemeColor(bg);
     }
@@ -136,37 +144,110 @@ export class StatusBarManager {
     this.item.color = undefined;
   }
 
+  /**
+   * The dashboard tooltip — a popover-style card shown on hover. Built as GFM
+   * tables (VSCode MarkdownString supports them) with █░ progress bars and
+   * codicon status markers. Three blocks: 计划重置 / 积分与支出 / 上下文.
+   */
   private buildTooltip(s: HudSnapshot): vscode.MarkdownString {
     const md = new vscode.MarkdownString(undefined, true);
     md.isTrusted = true;
     md.supportThemeIcons = true;
-    const lines: string[] = [`**${s.modelLabel}**`];
+    md.supportHtml = true;
 
-    if (s.contextPercent !== null && s.contextTokens) {
-      const totalK = Math.round((s.contextTokens.inputTokens + s.contextTokens.cacheCreationTokens + s.contextTokens.cacheReadTokens) / 1000);
-      lines.push(`Context: **${s.contextPercent}%**  (${totalK}k / ${Math.round(s.windowSize / 1000)}k)`);
-    } else {
-      lines.push('Context: — (no assistant turn yet)');
+    // Header: model + status badge.
+    const statusBadge = `${statusCodicon(s.snapshotStatus)} ${statusLabel(s)}`;
+    md.appendMarkdown(`### ${s.modelLabel}  \n\n`);
+    md.appendMarkdown(`${statusBadge}  \n\n`);
+
+    // --- Block 1: 计划重置 (plan reset windows) ---
+    md.appendMarkdown(`**计划重置**  \n\n`);
+    md.appendMarkdown('| 窗口 | 用量 | 重置倒计时 |\n');
+    md.appendMarkdown('|---|---|---|\n');
+    md.appendMarkdown(windowRow('5小时', s.usage?.fiveHourPercent ?? null, s.usage?.fiveHourResetAt ?? null));
+    md.appendMarkdown(windowRow('每周', s.usage?.sevenDayPercent ?? null, s.usage?.sevenDayResetAt ?? null));
+    // Monthly window: GLM API doesn't expose it — show placeholder.
+    md.appendMarkdown(windowRow('每月', null, null));
+    md.appendMarkdown('\n');
+
+    // --- Block 2: 积分 / 支出 / 成本扫描 ---
+    md.appendMarkdown(`**积分与支出**  \n\n`);
+    md.appendMarkdown('| 项 | 数值 |\n');
+    md.appendMarkdown('|---|---|\n');
+    const costStr = s.sessionCostYuan !== null ? `≈¥${s.sessionCostYuan.toFixed(2)}` : '—';
+    md.appendMarkdown(`| 会话成本 | ${costStr} |\n`);
+    if (s.sessionTokens) {
+      md.appendMarkdown(
+        `| Token 明细 | ${formatTokens(s.sessionTokens.inputTokens)} in · ${formatTokens(s.sessionTokens.outputTokens)} out · ${formatTokens(s.sessionTokens.cacheCreationTokens)} cache |\n`,
+      );
     }
+    md.appendMarkdown(`| 余额 | — |\n`);
+    md.appendMarkdown(`| 月支出 | — |\n`);
+    md.appendMarkdown('\n');
 
-    if (s.usage) {
-      const parts: string[] = [];
-      if (s.usage.fiveHourPercent !== null) parts.push(`5h ${s.usage.fiveHourPercent}%`);
-      if (s.usage.sevenDayPercent !== null) parts.push(`7d ${s.usage.sevenDayPercent}%`);
-      if (s.usage.balanceLabel) parts.push(s.usage.balanceLabel);
-      if (s.usage.fiveHourResetAt) parts.push(`resets ${s.usage.fiveHourResetAt.toLocaleString()}`);
-      lines.push(`Usage (${s.usage.provider}): ${parts.join(' · ')}`);
-    } else {
-      lines.push('Usage: no fresh provider snapshot');
+    // --- Block 3: 上下文 ---
+    md.appendMarkdown(`**上下文**  \n\n`);
+    md.appendMarkdown('| 项 | 数值 |\n');
+    md.appendMarkdown('|---|---|\n');
+    const ctxStr = s.contextPercent !== null
+      ? `${renderBar(s.contextPercent, TOOLTIP_BAR_WIDTH)} ${renderPercent(s.contextPercent)}`
+      : '—';
+    md.appendMarkdown(`| 用量 | ${ctxStr} |\n`);
+    if (s.contextTokens) {
+      const used = formatTokens(s.contextTokens.inputTokens + s.contextTokens.cacheCreationTokens + s.contextTokens.cacheReadTokens);
+      md.appendMarkdown(`| Token | ${used} / ${formatTokens(s.windowSize)} |\n`);
     }
+    md.appendMarkdown('\n');
 
-    lines.push('');
-    lines.push(`Transcript: \`${shorten(s.transcriptPath ?? '', 60)}\``);
-    lines.push('');
-    lines.push('Click to open the full HUD detail panel.');
-    md.appendMarkdown(lines.join('\n\n'));
+    md.appendMarkdown(`---\n\n$(info) 点击查看完整 HUD`);
     return md;
   }
+}
+
+/** Overall level = the most urgent across context + all usage windows + snapshot freshness. */
+function overallStatusLevel(s: HudSnapshot): Level {
+  if (s.snapshotStatus === 'missing' || s.snapshotStatus === 'stale') {
+    // stale/missing isn't "critical" by itself; defer to actual usage levels.
+  }
+  const levels: Level[] = [contextLevel(s.contextPercent)];
+  const u = s.usage;
+  if (u) {
+    levels.push(quotaLevel(u.fiveHourPercent), quotaLevel(u.sevenDayPercent));
+  }
+  if (levels.includes('critical')) return 'critical';
+  if (levels.includes('warn')) return 'warn';
+  return 'ok';
+}
+
+/** The leading codicon for the status bar text — the "overlay indicator". */
+function leadingCodicon(s: HudSnapshot, level: Level): string {
+  if (s.snapshotStatus === 'stale') return '$(clock)';
+  if (s.snapshotStatus === 'missing') return '$(pulse)';
+  return levelCodicon(level) === '$(check)' ? '$(pulse)' : levelCodicon(level);
+}
+
+/** Human status label for the tooltip header badge. */
+function statusLabel(s: HudSnapshot): string {
+  if (s.snapshotStatus === 'stale') return '快照过期';
+  if (s.snapshotStatus === 'missing') return '无快照';
+  const u = s.usage;
+  const five = u?.fiveHourPercent ?? null;
+  const seven = u?.sevenDayPercent ?? null;
+  if (five !== null && five >= 90) return '已达上限';
+  if (seven !== null && seven >= 90) return '已达上限';
+  if (five !== null && five >= 75) return '接近上限';
+  if (seven !== null && seven >= 75) return '接近上限';
+  return '正常';
+}
+
+/** One window row of the 计划重置 table, with a level codicon prefix. */
+function windowRow(label: string, percent: number | null, resetAt: Date | null): string {
+  const level = quotaLevel(percent);
+  const icon = levelCodicon(level);
+  const bar = renderBar(percent, TOOLTIP_BAR_WIDTH);
+  const pct = renderPercent(percent);
+  const countdown = renderCountdownShort(resetAt);
+  return `| ${icon} ${label} | ${bar} ${pct} | ${countdown} |\n`;
 }
 
 function currentWorkspaceFolder(): string | null {
@@ -175,30 +256,15 @@ function currentWorkspaceFolder(): string | null {
     return null;
   }
   const fsPath = folders[0].uri.fsPath;
-  // Refuse drive-root workspaces (e.g. "D:\"). A drive root contains protected
-  // system folders (System Volume Information, $Recycle.Bin, Recovery) that
-  // throw EPERM on stat. Operating there would cause the HUD — or the
-  // dist/index.js subprocess we spawn with this as cwd — to trip over them.
-  // Treat a drive root like "no workspace": render idle instead.
   if (isDriveRoot(fsPath)) {
     return null;
   }
   return fsPath;
 }
 
-/**
- * True when a path is exactly a Windows drive root ("D:\\", "D:/", "D:") or a
- * POSIX root ("/"). On Windows the comparison is case-insensitive.
- */
 function isDriveRoot(fsPath: string): boolean {
   if (!fsPath) return true;
   const normalized = fsPath.replace(/\\/g, '/').toLowerCase();
   if (normalized === '/') return true;
-  // "x:", "x:/"
   return /^[a-z]:\/?$/.test(normalized);
-}
-
-function shorten(p: string, max: number): string {
-  if (p.length <= max) return p;
-  return `…${p.slice(p.length - max + 1)}`;
 }

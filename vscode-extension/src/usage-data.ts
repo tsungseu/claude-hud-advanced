@@ -25,6 +25,16 @@ export interface ContextTokens {
   cacheReadTokens: number;
 }
 
+/** Full-session accumulated token totals, for cost estimation + the tooltip. */
+export interface SessionTokens {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+}
+
+export type SnapshotStatus = 'fresh' | 'stale' | 'missing';
+
 export interface ProviderUsage {
   fiveHourPercent: number | null;
   sevenDayPercent: number | null;
@@ -37,6 +47,8 @@ export interface ProviderUsage {
   snapshotPath: string;
   /** ms since the snapshot's updated_at, or null if unparseable. */
   ageMs: number | null;
+  /** Freshness state — drives the status badge in the tooltip. */
+  status: SnapshotStatus;
 }
 
 export interface HudSnapshot {
@@ -50,6 +62,14 @@ export interface HudSnapshot {
   workspaceFolder: string;
   /** How the transcript was matched to the workspace (for diagnostics). */
   transcriptMatchStrategy: import('./transcript-resolver').ResolvedTranscript['matchStrategy'] | 'none';
+  /** Full-session accumulated tokens, for the cost-scan block. */
+  sessionTokens: SessionTokens | null;
+  /** Estimated session cost in yuan, or null when pricing unknown. */
+  sessionCostYuan: number | null;
+  /** Model id used to look up pricing (e.g. "glm-5.2[1m]"). */
+  modelId: string;
+  /** Overall provider freshness state for the status badge. */
+  snapshotStatus: SnapshotStatus;
   /** ISO timestamp this snapshot was assembled. */
   collectedAt: string;
 }
@@ -137,6 +157,98 @@ export function computeContextPercent(t: ContextTokens | null, windowSize: numbe
   return Math.min(100, Math.max(0, Math.round(pct)));
 }
 
+/**
+ * Accumulate token usage across the WHOLE session transcript.
+ * Mirrors claude-hud's parseTranscript dedup (src/transcript.ts:383-395):
+ * Claude Code can write the same API response 2-3 times consecutively, so we
+ * skip consecutive duplicate usage blocks by their token-tuple fingerprint.
+ * Returns null if the file is missing or has no assistant usage.
+ */
+export function readSessionTokenTotals(transcriptPath: string): SessionTokens | null {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(transcriptPath, 'utf8');
+  } catch {
+    return null;
+  }
+
+  const totals: SessionTokens = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+  };
+  let seenAny = false;
+  let lastKey: string | undefined;
+
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line || !line.trim()) {
+      lastKey = undefined;
+      continue;
+    }
+    let entry: { type?: string; message?: { usage?: Record<string, unknown> } };
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      lastKey = undefined;
+      continue;
+    }
+    if (entry.type !== 'assistant') {
+      lastKey = undefined;
+      continue;
+    }
+    const usage = entry.message?.usage;
+    if (!usage) {
+      lastKey = undefined;
+      continue;
+    }
+    const inT = normalizeToken(usage.input_tokens);
+    const outT = normalizeToken(usage.output_tokens);
+    const ccT = normalizeToken(usage.cache_creation_input_tokens);
+    const crT = normalizeToken(usage.cache_read_input_tokens);
+    const key = `${inT}|${outT}|${ccT}|${crT}`;
+    if (key === lastKey) {
+      continue; // consecutive duplicate (dual-logged API response)
+    }
+    lastKey = key;
+    seenAny = true;
+    totals.inputTokens += inT;
+    totals.outputTokens += outT;
+    totals.cacheCreationTokens += ccT;
+    totals.cacheReadTokens += crT;
+  }
+  return seenAny ? totals : null;
+}
+
+/** Per-million-token price in yuan for a model, used for cost estimation. */
+export interface ModelPricing {
+  /** ¥ per million input tokens. */
+  input: number;
+  /** ¥ per million output tokens. */
+  output: number;
+  /** ¥ per million cache-creation tokens (often discounted vs input). */
+  cache: number;
+}
+
+/**
+ * Estimate session cost in yuan from accumulated tokens + a pricing table.
+ * Returns null when the model has no pricing entry. cache_read is free on
+ * most providers (prompt-cache reads aren't billed separately), so it's
+ * excluded from the sum.
+ */
+export function computeSessionCost(tokens: SessionTokens | null, pricing: ModelPricing | null): number | null {
+  if (!tokens || !pricing) {
+    return null;
+  }
+  const cost =
+    (tokens.inputTokens * pricing.input +
+      tokens.outputTokens * pricing.output +
+      tokens.cacheCreationTokens * pricing.cache) /
+    1_000_000;
+  // Round to 2 decimals; values < 0.01 still show as ≈¥0.00 which is honest.
+  return Math.round(cost * 100) / 100;
+}
+
 function parsePercent(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return null;
@@ -161,8 +273,12 @@ function parseDate(value: unknown): Date | null {
 }
 
 /**
- * Read one provider's usage snapshot and validate freshness.
- * Mirrors claude-hud getUsageFromExternalSnapshot (src/external-usage.ts:263).
+ * Read one provider's usage snapshot. Unlike the old behavior, a STALE snapshot
+ * is still returned (with status: 'stale') so the tooltip can surface a
+ * "snapshot expired" badge instead of silently hiding. Only a missing/unreadable
+ * file, an unparseable body, or no updated_at yields null.
+ *
+ * `freshnessMs === 0` disables the age check entirely (treats any age as fresh).
  */
 export function readProviderSnapshot(
   provider: string,
@@ -201,10 +317,9 @@ export function readProviderSnapshot(
   if (updatedAtMs === null) {
     return null;
   }
-  // A freshness of 0 means "always show, even if stale" (never hide on age).
-  if (freshnessMs > 0 && now - updatedAtMs > freshnessMs) {
-    return null;
-  }
+
+  const ageMs = now - updatedAtMs;
+  const isStale = freshnessMs > 0 && ageMs > freshnessMs;
 
   const fiveHour = parsePercent(parsed.five_hour?.used_percentage);
   const sevenDay = parsePercent(parsed.seven_day?.used_percentage);
@@ -224,8 +339,21 @@ export function readProviderSnapshot(
     balanceLabel: balance,
     provider,
     snapshotPath,
-    ageMs: now - updatedAtMs,
+    ageMs,
+    status: isStale ? 'stale' : 'fresh',
   };
+}
+
+/** Probe whether a provider snapshot exists at all (without parsing). */
+export function probeProviderStatus(provider: string): SnapshotStatus {
+  const fileName = PROVIDER_SNAPSHOT_FILES[provider];
+  if (!fileName) return 'missing';
+  try {
+    fs.accessSync(path.join(getClaudeConfigDir(), fileName));
+    return 'fresh';
+  } catch {
+    return 'missing';
+  }
 }
 
 /** Resolve which provider to read: explicit setting, else probe in fixed order. */
@@ -261,9 +389,10 @@ function readSettingsEnv(): Record<string, string> {
  * Resolve the model id from Claude Code settings (e.g. "glm-5.2[1m]").
  * Checks opus > sonnet > haiku > ANTHROPIC_MODEL, returns the first defined.
  */
-function resolveModelId(env: Record<string, string>): string {
+export function resolveModelId(env?: Record<string, string>): string {
+  const e = env ?? readSettingsEnv();
   for (const key of CLAUDE_MODEL_ENV_KEYS) {
-    const v = env[key];
+    const v = e[key];
     if (typeof v === 'string' && v.trim()) {
       return v.trim();
     }
@@ -373,6 +502,8 @@ export function collectHudSnapshot(
     modelLabelOverride?: string;
     providerSetting?: string;
     snapshotFreshnessMs?: number;
+    /** Per-model pricing table (¥/M tokens), for session cost estimation. */
+    pricing?: Record<string, ModelPricing>;
     /** How the transcriptPath was matched to the workspace (from resolveActiveTranscript). */
     transcriptMatchStrategy?: HudSnapshot['transcriptMatchStrategy'];
   } = {},
@@ -381,12 +512,34 @@ export function collectHudSnapshot(
   const providerSetting = options.providerSetting ?? 'auto';
   const freshnessMs = options.snapshotFreshnessMs ?? 600_000;
 
+  const modelId = resolveModelId();
+
   let contextTokens: ContextTokens | null = null;
+  let sessionTokens: SessionTokens | null = null;
   if (transcriptPath) {
     contextTokens = readLastTurnUsage(transcriptPath);
+    sessionTokens = readSessionTokenTotals(transcriptPath);
   }
 
   const usage = resolveProviderUsage(providerSetting, freshnessMs);
+
+  // Status for the badge: prefer the snapshot's own status, else probe existence.
+  let snapshotStatus: SnapshotStatus = 'missing';
+  if (usage) {
+    snapshotStatus = usage.status;
+  } else {
+    // No usable snapshot data — was the file absent, or just stale/empty?
+    const target = providerSetting === 'auto' ? firstExistingProvider() : providerSetting;
+    if (target) {
+      const probe = readProviderSnapshot(target, freshnessMs);
+      snapshotStatus = probe ? probe.status : probeProviderStatus(target);
+    }
+  }
+
+  // Cost: look up pricing by exact model id, then by the suffix-stripped form.
+  const pricing = options.pricing ?? {};
+  const pricingEntry = pricing[modelId] ?? pricing[stripContextSuffix(modelId)] ?? null;
+  const sessionCostYuan = computeSessionCost(sessionTokens, pricingEntry);
 
   return {
     contextPercent: computeContextPercent(contextTokens, windowSize),
@@ -397,8 +550,22 @@ export function collectHudSnapshot(
     transcriptPath,
     workspaceFolder,
     transcriptMatchStrategy: options.transcriptMatchStrategy ?? (transcriptPath ? 'exact' : 'none'),
+    sessionTokens,
+    sessionCostYuan,
+    modelId,
+    snapshotStatus,
     collectedAt: new Date().toISOString(),
   };
+}
+
+/** First provider (in probe order) whose snapshot file exists. */
+function firstExistingProvider(): string | null {
+  for (const provider of Object.keys(PROVIDER_SNAPSHOT_FILES)) {
+    if (probeProviderStatus(provider) !== 'missing') {
+      return provider;
+    }
+  }
+  return null;
 }
 
 /** Re-exported so callers can read home dir consistently. */

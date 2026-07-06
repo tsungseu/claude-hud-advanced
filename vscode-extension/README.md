@@ -1,12 +1,14 @@
 # Claude HUD for VS Code
 
-Track Claude Code context and usage right in your status bar — no terminal needed.
+Claude HUD for VS Code: Claude Code context and usage, right in your status bar.
 
 A standalone VS Code extension that brings [claude-hud](https://github.com/tsungseu/claude-hud-advanced) into the editor: a live, always-visible readout of your current session's context-window fill and provider usage, with a click-through panel for the full picture.
 
-- **Status bar at a glance:** context fill and usage percentages with progress bars, refreshed every couple of seconds.
+- **Status bar at a glance:** context fill and usage percentages with progress bars, refreshed every couple of seconds. The leading icon reflects status (`$(pulse)` normal, `$(warning)` near limit, `$(error)` at limit, `$(clock)` snapshot stale).
+- **Hover for the dashboard:** hovering the status bar shows a popover-style card with three blocks — plan reset windows (5h / weekly / monthly + countdowns), credits & spend (session cost estimate), and context usage. Fields the provider doesn't expose (monthly window, balance, monthly spend) show `—`.
 - **Click for the full HUD:** opens a panel rendering the complete claude-hud statusline — tools, agents, todos, git, cost — in the same colors you see in the terminal.
 - **Works with your provider:** reads usage snapshots from GLM, MiniMax, Alibaba, and Kimi coding plans (the quota pollers that ship with claude-hud), plus context from the session transcript.
+- **Session cost estimate:** accumulates tokens across the session transcript and multiplies by a per-model pricing table (`claudeHud.pricing`) to estimate spend in ¥. Built-in defaults cover common GLM models; override with your plan's rates for accuracy.
 - **Auto-detects your context window:** picks up `CLAUDE_CODE_AUTO_COMPACT_WINDOW` and the model id suffix (e.g. `glm-5.2[1m]` → 1M), so the percentage is right for your plan.
 
 ## Requirements
@@ -36,6 +38,7 @@ Then **reload the window** (`Developer: Reload Window`). The status bar item app
 | `claudeHud.refreshIntervalMs` | `2000` | Status bar refresh interval. |
 | `claudeHud.snapshotFreshnessMs` | `600000` | Max age of a usage snapshot before it's considered stale. |
 | `claudeHud.hudEntryPath` | `""` | Absolute path to claude-hud's `dist/index.js`. Empty = auto-detect the newest installed version. |
+| `claudeHud.pricing` | `{}` | Per-model token pricing in ¥/M tokens, for session cost estimation. Keys are model ids (e.g. `"glm-5.2"`); each value is `{ input, output, cache }`. Built-in defaults cover common GLM models. |
 
 ## Commands
 

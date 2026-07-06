@@ -1,8 +1,8 @@
 {
   "name": "claude-hud-vscode",
   "displayName": "Claude HUD for VS Code",
-  "description": "Track Claude Code context and usage right in your status bar — no terminal needed.",
-  "version": "0.2.0",
+  "description": "Claude HUD for VS Code: Claude Code context and usage, right in your status bar.",
+  "version": "0.3.0",
   "publisher": "tsungseu",
   "license": "MIT",
   "icon": "icon.png",
@@ -93,6 +93,20 @@
           ],
           "default": "auto",
           "description": "Which provider usage snapshot to read. 'auto' probes for the first existing snapshot file."
+        },
+        "claudeHud.pricing": {
+          "type": "object",
+          "description": "Per-model token pricing in yuan per million tokens, for session cost estimation. Keys are model ids (e.g. \"glm-5.2\"). Each value: { input, output, cache }. Built-in defaults cover common GLM models; override with your plan's rates for accuracy.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "input": { "type": "number", "description": "¥ per million input tokens" },
+              "output": { "type": "number", "description": "¥ per million output tokens" },
+              "cache": { "type": "number", "description": "¥ per million cache-creation tokens" }
+            },
+            "required": ["input", "output", "cache"]
+          },
+          "default": {}
         }
       }
     }
