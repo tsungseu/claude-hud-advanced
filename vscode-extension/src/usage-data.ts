@@ -48,6 +48,8 @@ export interface HudSnapshot {
   modelLabel: string;
   transcriptPath: string | null;
   workspaceFolder: string;
+  /** How the transcript was matched to the workspace (for diagnostics). */
+  transcriptMatchStrategy: import('./transcript-resolver').ResolvedTranscript['matchStrategy'] | 'none';
   /** ISO timestamp this snapshot was assembled. */
   collectedAt: string;
 }
@@ -371,6 +373,8 @@ export function collectHudSnapshot(
     modelLabelOverride?: string;
     providerSetting?: string;
     snapshotFreshnessMs?: number;
+    /** How the transcriptPath was matched to the workspace (from resolveActiveTranscript). */
+    transcriptMatchStrategy?: HudSnapshot['transcriptMatchStrategy'];
   } = {},
 ): HudSnapshot {
   const windowSize = resolveContextWindowSize(options.windowSize ?? 0);
@@ -392,6 +396,7 @@ export function collectHudSnapshot(
     modelLabel: inferModelLabel(options.modelLabelOverride ?? ''),
     transcriptPath,
     workspaceFolder,
+    transcriptMatchStrategy: options.transcriptMatchStrategy ?? (transcriptPath ? 'exact' : 'none'),
     collectedAt: new Date().toISOString(),
   };
 }

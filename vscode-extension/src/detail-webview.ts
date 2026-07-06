@@ -100,7 +100,11 @@ export class DetailPanelManager {
         return;
       }
       const body = ansiToHtml(result.output || '');
-      panel.webview.html = this.shellHtml('', body);
+      // Diagnostic footer: shows how the transcript was matched to the workspace.
+      // Rendered dim under the HUD so mismatches (global-newest fallback, etc.)
+      // are visible at a glance without obscuring the HUD itself.
+      const diag = this.diagnosticLine(snapshot);
+      panel.webview.html = this.shellHtml('', body + diag);
     } catch (err) {
       const panel = this.panel;
       if (panel) {
@@ -109,6 +113,21 @@ export class DetailPanelManager {
     } finally {
       this.rendering = false;
     }
+  }
+
+  /**
+   * A dim diagnostic line appended under the HUD: workspace path + match
+   * strategy + transcript path. Makes resolver behavior observable without
+   * a separate debug view. 'global-newest' especially deserves visibility
+   * because it means the workspace didn't match any project dir.
+   */
+  private diagnosticLine(snapshot: HudSnapshot): string {
+    const ws = escapeForPre(snapshot.workspaceFolder || '(no workspace)');
+    const strategy = snapshot.transcriptMatchStrategy;
+    const stratColor = strategy === 'global-newest' ? '#f0ad4e' : '#6a9955';
+    const stratLabel = `<span style="color:${stratColor}">[${strategy}]</span>`;
+    const transcript = escapeForPre(snapshot.transcriptPath ? shortenPath(snapshot.transcriptPath) : '(none)');
+    return `\n<span style="opacity:0.55">workspace: ${ws} ${stratLabel}\ntranscript: ${transcript}</span>`;
   }
 
   /** Outer HTML shell with a themed monospace <pre>; messageOrHtml fills it. */
@@ -156,4 +175,9 @@ ${title ? `<div class="meta">${title}</div>` : ''}
 
 function escapeForPre(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function shortenPath(p: string, max = 70): string {
+  if (p.length <= max) return p;
+  return `…${p.slice(p.length - max + 1)}`;
 }

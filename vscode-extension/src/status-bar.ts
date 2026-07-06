@@ -59,9 +59,11 @@ export class StatusBarManager {
     const settings = readSettings();
 
     let transcriptPath: string | null = null;
+    let matchStrategy: import('./transcript-resolver').ResolvedTranscript['matchStrategy'] | 'none' = 'none';
     if (folder) {
       const resolved = resolveActiveTranscript(folder);
       transcriptPath = resolved?.transcriptPath ?? null;
+      matchStrategy = resolved?.matchStrategy ?? 'none';
     }
 
     const snapshot = collectHudSnapshot(folder ?? '', transcriptPath, {
@@ -69,6 +71,7 @@ export class StatusBarManager {
       modelLabelOverride: settings.modelLabel,
       providerSetting: settings.provider,
       snapshotFreshnessMs: settings.snapshotFreshnessMs,
+      transcriptMatchStrategy: matchStrategy,
     });
 
     this.last = snapshot;
@@ -171,7 +174,28 @@ function currentWorkspaceFolder(): string | null {
   if (!folders || folders.length === 0) {
     return null;
   }
-  return folders[0].uri.fsPath;
+  const fsPath = folders[0].uri.fsPath;
+  // Refuse drive-root workspaces (e.g. "D:\"). A drive root contains protected
+  // system folders (System Volume Information, $Recycle.Bin, Recovery) that
+  // throw EPERM on stat. Operating there would cause the HUD — or the
+  // dist/index.js subprocess we spawn with this as cwd — to trip over them.
+  // Treat a drive root like "no workspace": render idle instead.
+  if (isDriveRoot(fsPath)) {
+    return null;
+  }
+  return fsPath;
+}
+
+/**
+ * True when a path is exactly a Windows drive root ("D:\\", "D:/", "D:") or a
+ * POSIX root ("/"). On Windows the comparison is case-insensitive.
+ */
+function isDriveRoot(fsPath: string): boolean {
+  if (!fsPath) return true;
+  const normalized = fsPath.replace(/\\/g, '/').toLowerCase();
+  if (normalized === '/') return true;
+  // "x:", "x:/"
+  return /^[a-z]:\/?$/.test(normalized);
 }
 
 function shorten(p: string, max: number): string {

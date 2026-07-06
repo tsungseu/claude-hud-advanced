@@ -89,15 +89,31 @@ function compareSemver(a: string, b: string): number {
 }
 
 /**
+ * True when a path is exactly a Windows drive root ("D:\\", "D:/", "D:") or a
+ * POSIX root ("/"). Used to avoid spawning the HUD subprocess with such a cwd,
+ * which would trigger fs/git scans over protected system folders (EPERM).
+ */
+function isDriveRoot(fsPath: string): boolean {
+  if (!fsPath) return true;
+  const normalized = fsPath.replace(/\\/g, '/').toLowerCase();
+  if (normalized === '/') return true;
+  return /^[a-z]:\/?$/.test(normalized);
+}
+
+/**
  * Build the StdinData JSON to pipe into dist/index.js from our local snapshot.
  * Keeps claude-hud's parser happy: context_window shape, optional rate_limits
  * from the provider snapshot, and the real transcript_path so it can render
  * tools/agents/todos.
  */
 export function buildSyntheticStdin(snapshot: HudSnapshot): string {
+  // Never pass a drive root as cwd to dist/index.js: it would trigger git/fs
+  // scans over protected system folders (System Volume Information → EPERM).
+  // If the workspace is a drive root, omit cwd so the subprocess doesn't scan it.
+  const safeCwd = isDriveRoot(snapshot.workspaceFolder) ? undefined : snapshot.workspaceFolder || undefined;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const stdin: any = {
-    cwd: snapshot.workspaceFolder || undefined,
+    cwd: safeCwd,
     model: { display_name: snapshot.modelLabel },
     transcript_path: snapshot.transcriptPath ?? undefined,
   };
