@@ -1,67 +1,59 @@
-// Claude HUD for VS Code — extension icon.
+// Claude HUD for VS Code — extension icon (v2: official starburst + "HUD" wordmark).
 //
-// Visual concept: a Claude-family icon (coral #D97757 ground, white Claude
-// starburst) overlaid with a small HUD readout in the lower portion — a
-// progress bar + a gauge arc — to communicate "context/usage dashboard".
-// The starburst path is a redrawn, simplified, ORIGINAL 16-arm sunburst
-// inspired by Claude's mark (not the official path geometry), so the icon is
-// an original work in the Claude visual idiom rather than a derived asset.
+// Design: the official Claude starburst mark on a coral (#D97757) rounded-square
+// ground, with a bold "HUD" wordmark in the lower third. Communicates "Claude
+// HUD" as plainly as possible.
+//
+// The starburst path is the official Claude mark geometry (from the official
+// extension's claude-logo.svg). This makes the icon a derivative of Anthropic's
+// trademark — acceptable for this local, personal, Claude-Code-companion tool,
+// but not something to ship to a public marketplace.
+//
+// NOTE: sharp's SVG renderer (resvg/librsvg) needs a system font for <text>.
+// Windows has Segoe UI / Arial bold; this <text> should render. If it doesn't,
+// we fall back to vector letter paths.
 import sharp from 'sharp';
+import fs from 'node:fs';
 
 const CORAL = '#D97757';
-const CORAL_DEEP = '#B85A3C';
 const WHITE = '#FFFFFF';
-const DARK = '#3A2418';
+
+// Official Claude starburst path (viewBox 0 0 24 24, fill #D97757 originally).
+// We'll re-tint it white and scale it into the upper portion of our 128 canvas.
+const STAR_PATH =
+  'M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z';
 
 const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <defs>
-    <!-- Rounded-square background with a subtle top-light gradient for depth. -->
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#E08868"/>
       <stop offset="1" stop-color="${CORAL}"/>
     </linearGradient>
   </defs>
 
-  <!-- Background tile -->
+  <!-- Coral rounded-square ground -->
   <rect x="6" y="6" width="116" height="116" rx="26" ry="26" fill="url(#bg)"/>
 
-  <!-- Claude-style starburst (16 arms), centered upper area to leave room for HUD. -->
-  <!-- Each arm is a rounded "petal"; drawn as a single path fill. Center ~ (64,50). -->
-  <g transform="translate(64,50)" fill="${WHITE}">
-    <g>
-      <!-- 16 arms via repeated rotation. One arm = a thin tapered lozenge pointing up. -->
-      ${Array.from({ length: 16 }, (_, i) => {
-        const angle = (i * 360) / 16;
-        return `<path transform="rotate(${angle})" d="M0,-30 C2.2,-20 2.2,-12 0,-6 C-2.2,-12 -2.2,-20 0,-30 Z"/>`;
-      }).join('\n      ')}
-    </g>
-    <!-- Soft inner hub so arms read as radiating from a point. -->
-    <circle r="6.5" fill="${WHITE}"/>
+  <!-- Official Claude starburst, re-tinted white, scaled into the upper area. -->
+  <!-- Native viewBox 24x24, centered ~ (12,12). Scale ~2.5 -> ~60px; center at (64,44). -->
+  <g transform="translate(34, 14) scale(2.5)" fill="${WHITE}">
+    <path d="${STAR_PATH}" fill-rule="nonzero"/>
   </g>
 
-  <!-- HUD readout panel: a translucent dark card across the lower third. -->
-  <rect x="22" y="80" width="84" height="30" rx="8" ry="8" fill="${DARK}" opacity="0.92"/>
-
-  <!-- Context bar: ~45% filled (green-ish on coral reads as teal/white here). -->
-  <rect x="30" y="88"  width="68" height="5" rx="2.5" ry="2.5" fill="${WHITE}" opacity="0.22"/>
-  <rect x="30" y="88"  width="30" height="5" rx="2.5" ry="2.5" fill="#5BC89B"/>
-
-  <!-- Usage bar: ~56% filled -->
-  <rect x="30" y="97"  width="68" height="5" rx="2.5" ry="2.5" fill="${WHITE}" opacity="0.22"/>
-  <rect x="30" y="97"  width="38" height="5" rx="2.5" ry="2.5" fill="#7BB8FF"/>
-
-  <!-- Tiny gauge tick on the right to suggest "instrument". -->
-  <g transform="translate(108,92)" stroke="${WHITE}" stroke-width="2.4" fill="none" stroke-linecap="round">
-    <path d="M-4,5 A5,5 0 1 1 4,5" opacity="0.85"/>
-    <line x1="0" y1="0" x2="2.6" y2="-2.6"/>
-  </g>
+  <!-- "HUD" wordmark, bold, centered in the lower third. -->
+  <text x="64" y="108"
+        font-family="'Segoe UI', 'Arial', Helvetica, sans-serif"
+        font-size="30" font-weight="700"
+        text-anchor="middle"
+        fill="${WHITE}"
+        letter-spacing="2">${'HUD'}</text>
 </svg>`;
 
 const outPath = new URL('./icon.png', import.meta.url).pathname.replace(/^\//, '');
-await sharp(Buffer.from(svg))
-  .resize(128, 128)
-  .png()
-  .toFile(outPath);
+await sharp(Buffer.from(svg)).resize(128, 128).png().toFile(outPath);
+
+// Also keep the SVG as a source asset.
+fs.writeFileSync(new URL('./icon.svg', import.meta.url).pathname.replace(/^\//, ''), svg);
 
 console.log('wrote', outPath);

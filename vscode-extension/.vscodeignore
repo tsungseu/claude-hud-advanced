@@ -6,6 +6,7 @@ node_modules/**
 tsconfig.json
 esbuild.config.mjs
 build-icon.mjs
+icon.svg
 *.map
 .gitignore
 **/*.ts
