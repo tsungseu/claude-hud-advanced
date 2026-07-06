@@ -1,16 +1,10 @@
 // The click-through dashboard panel: a styled usage card matching the reference
-// design (dark card, cyan context bar, coral usage bar, status dot). Built as a
-// webview so we get full CSS color control (the hover tooltip's MarkdownString
-// can't do custom colors). Re-renders on each status bar snapshot tick while
-// visible.
-//
-// A small "terminal HUD" link at the bottom switches to the legacy view: the
-// full claude-hud colored statusline rendered by spawning dist/index.js. That
-// view needs claude-hud installed; the dashboard card does not.
+// design (dark card, cyan context bar, coral usage bar, status dot, per-hour
+// usage chart). Built as a webview so we get full CSS color control (the hover
+// tooltip's MarkdownString can't do custom colors). The HTML is seeded once on
+// open with the current snapshot inlined; subsequent snapshots are pushed via
+// postMessage and applied to the DOM by the inline script (no full re-render).
 import * as vscode from 'vscode';
-import { renderHudOnce, resolveHudEntry } from './hud-subprocess';
-import { ansiToHtml } from './ansi-to-html';
-import { readSettings } from './config';
 import {
   contextLevel,
   quotaLevel,
@@ -20,13 +14,11 @@ import {
   type Level,
 } from './bar';
 import type { HudSnapshot, ProviderUsage } from './usage-data';
-
-type View = 'dashboard' | 'terminal';
+import { renderHourlyChartHtml } from './chart-html';
 
 export class DetailPanelManager {
   private panel: vscode.WebviewPanel | null = null;
   private currentSnapshot: HudSnapshot | null = null;
-  private currentView: View = 'dashboard';
   private rendering = false;
 
   showOrFocus(snapshot: HudSnapshot | null): void {
@@ -45,14 +37,14 @@ export class DetailPanelManager {
       panel.webview.html = this.shellHtml('Loading…');
     }
     this.currentSnapshot = snapshot;
-    this.currentView = 'dashboard';
     void this.render();
   }
 
   onSnapshot(snapshot: HudSnapshot | null): void {
     this.currentSnapshot = snapshot;
-    if (this.panel && this.panel.visible) {
-      void this.render();
+    if (this.panel && this.panel.visible && snapshot) {
+      // Serialize: Date fields become ISO strings; the webview JS handles that.
+      this.panel.webview.postMessage(JSON.parse(JSON.stringify(snapshot)));
     }
   }
 
@@ -65,20 +57,9 @@ export class DetailPanelManager {
     panel.onDidDispose(() => {
       this.panel = null;
       this.currentSnapshot = null;
-      this.currentView = 'dashboard';
     });
     panel.onDidChangeViewState((e) => {
       if (e.webviewPanel.visible) {
-        void this.render();
-      }
-    });
-    // Switch between dashboard and terminal-HUD view via webview messages.
-    panel.webview.onDidReceiveMessage((msg) => {
-      if (msg && msg.view === 'terminal') {
-        this.currentView = 'terminal';
-        void this.render();
-      } else if (msg && msg.view === 'dashboard') {
-        this.currentView = 'dashboard';
         void this.render();
       }
     });
@@ -97,11 +78,7 @@ export class DetailPanelManager {
         return;
       }
 
-      if (this.currentView === 'terminal') {
-        await this.renderTerminalView(panel, snapshot);
-      } else {
-        panel.webview.html = this.dashboardHtml(snapshot);
-      }
+      panel.webview.html = this.dashboardHtml(snapshot);
     } catch (err) {
       const p = this.panel;
       if (p) {
@@ -112,26 +89,12 @@ export class DetailPanelManager {
     }
   }
 
-  private async renderTerminalView(panel: vscode.WebviewPanel, snapshot: HudSnapshot): Promise<void> {
-    const settings = readSettings();
-    const entry = resolveHudEntry(settings.hudEntryPath);
-    if (!entry) {
-      panel.webview.html = this.messageHtml(
-        'claude-hud is not installed, so the terminal HUD view is unavailable.\n\nThe dashboard card still works. Install claude-hud (/plugin install claude-hud) to enable this view.',
-      );
-      return;
-    }
-    const result = await renderHudOnce(entry, snapshot, 140);
-    const body = ansiToHtml(result.output || '');
-    panel.webview.html = this.terminalShellHtml(body);
-  }
-
   // ── Dashboard card HTML (the primary view) ───────────────────────────────
 
   private dashboardHtml(s: HudSnapshot): string {
     const statusInfo = statusDescriptor(s);
     const u = s.usage;
-    return `<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -152,49 +115,48 @@ export class DetailPanelManager {
   ${resetBlock(u)}
   ${spendBlock(s)}
   ${contextBlock(s)}
-
-  <footer class="card-footer">
-    <a href="#" id="switch-terminal">查看终端 HUD ›</a>
-  </footer>
+  ${chartBlock(s)}
 </div>
 <script>
-  document.getElementById('switch-terminal').addEventListener('click', (e) => {
-    e.preventDefault();
-    acquireVsCodeApi().postMessage({ view: 'terminal' });
-  });
+  const initial = __SNAPSHOT_JSON__;
+  function fmtTok(n){ if(n===null||n===undefined)return '—'; if(n>=1e6)return (n/1e6).toFixed(1)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'k'; return String(n); }
+  function pct(n){ return (n===null||n===undefined)?'—':Math.round(n)+'%'; }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function renderChart(buckets){
+    const el = document.getElementById('chart-area'); if(!el) return;
+    const nz = (buckets||[]).filter(b=>b.inputTokens+b.outputTokens+b.cacheTokens>0);
+    if(!nz.length){ el.innerHTML = '<div class="chart-empty">最近 24h 无用量数据</div>'; return; }
+    const max = Math.max(...nz.map(b=>b.inputTokens+b.outputTokens+b.cacheTokens),1);
+    el.innerHTML = '<div class="chart">'+nz.map(b=>{
+      const tot=b.inputTokens+b.outputTokens+b.cacheTokens; const h=(tot/max*100).toFixed(1);
+      const segs=[b.inputTokens>0?'<div class="seg seg-input" style="flex:'+b.inputTokens+';background:#00bfff"></div>':'',
+                  b.outputTokens>0?'<div class="seg seg-output" style="flex:'+b.outputTokens+';background:#ff6347"></div>':'',
+                  b.cacheTokens>0?'<div class="seg seg-cache" style="flex:'+b.cacheTokens+';background:#9b8bcf"></div>':''].join('');
+      const tip=esc(b.hour.slice(0,16).replace('T',' '))+' · in '+fmtTok(b.inputTokens)+' · out '+fmtTok(b.outputTokens)+' · cache '+fmtTok(b.cacheTokens);
+      return '<div class="chart-col" style="height:'+h+'%" data-tip="'+tip+'">'+segs+'</div>';
+    }).join('')+'</div><div class="chart-axis">'+nz.map(b=>'<span>'+b.hour.slice(11,13)+'</span>').join('')+'</div>';
+  }
+  function setText(id, v){ const el=document.getElementById(id); if(el) el.textContent = v; }
+  function renderAll(snap){
+    renderChart(snap.hourlyBuckets);
+    if(snap.sessionCostYuan!==null){
+      setText('cost', '≈¥'+snap.sessionCostYuan.toFixed(2));
+    }
+    if(snap.sessionTokens){
+      setText('breakdown', fmtTok(snap.sessionTokens.inputTokens)+' in · '+fmtTok(snap.sessionTokens.outputTokens)+' out · '+fmtTok(snap.sessionTokens.cacheCreationTokens)+' cache');
+    }
+    if(snap.contextPercent!==null){
+      setText('ctx-pct', pct(snap.contextPercent));
+      const used = snap.contextTokens ? (snap.contextTokens.inputTokens+snap.contextTokens.cacheCreationTokens+snap.contextTokens.cacheReadTokens) : 0;
+      setText('ctx-tok', fmtTok(used)+' / '+fmtTok(snap.windowSize));
+    }
+  }
+  renderAll(initial);
+  window.addEventListener('message', e => { if(e.data) renderAll(e.data); });
 </script>
 </body>
 </html>`;
-  }
-
-  // ── Terminal-HUD shell (the alternate view) ──────────────────────────────
-
-  private terminalShellHtml(body: string): string {
-    const fontVar = 'var(--vscode-editor-font-family, "Cascadia Code", Menlo, Consolas, monospace)';
-    const fg = 'var(--vscode-editor-foreground, #d4d4d4)';
-    const bg = 'var(--vscode-editor-background, #1e1e1e)';
-    const border = 'var(--vscode-panel-border, #444)';
-    return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Claude HUD</title>
-<style>
-  html,body{margin:0;padding:0;height:100%;background:${bg};color:${fg};}
-  body{padding:12px 16px;box-sizing:border-box;}
-  pre{font-family:${fontVar};font-size:var(--vscode-editor-font-size,13px);line-height:1.5;
-      white-space:pre;overflow:auto;margin:0;background:transparent;border:1px solid ${border};
-      border-radius:6px;padding:12px;}
-  a{color:inherit;}
-  .switch{font-family:var(--vscode-font-family,sans-serif);font-size:12px;margin-top:10px;}
-  .switch a{opacity:0.7;text-decoration:none;cursor:pointer;}
-</style></head>
-<body>
-<pre>${body}</pre>
-<div class="switch"><a id="back-dashboard">‹ 返回仪表盘</a></div>
-<script>
-  document.getElementById('back-dashboard').addEventListener('click', () => {
-    acquireVsCodeApi().postMessage({ view: 'dashboard' });
-  });
-</script>
-</body></html>`;
+    return html.replace('__SNAPSHOT_JSON__', JSON.stringify(s));
   }
 
   private shellHtml(message: string): string {
@@ -245,8 +207,8 @@ function spendBlock(s: HudSnapshot): string {
     : '—';
   return `  <section class="block">
     <h3>积分与支出</h3>
-    <div class="kv"><span>会话成本</span><span class="value">${cost}</span></div>
-    <div class="kv muted"><span>Token 明细</span><span>${breakdown}</span></div>
+    <div class="kv"><span>会话成本</span><span class="value" id="cost">${cost}</span></div>
+    <div class="kv muted"><span>Token 明细</span><span id="breakdown">${breakdown}</span></div>
     <div class="kv muted"><span>余额</span><span>—</span></div>
     <div class="kv muted"><span>月支出</span><span>—</span></div>
   </section>`;
@@ -264,11 +226,18 @@ function contextBlock(s: HudSnapshot): string {
     <div class="window">
       <div class="window-head">
         <span class="window-label">${levelDot(level)} 用量</span>
-        <span class="window-pct">${show ? renderPercent(s.contextPercent) : '—'}</span>
+        <span class="window-pct" id="ctx-pct">${show ? renderPercent(s.contextPercent) : '—'}</span>
       </div>
       <div class="bar-track"><div class="bar-fill cyan" style="width:${show ? pct : 0}%"></div></div>
-      <div class="window-reset">${used} / ${formatTokens(s.windowSize)}</div>
+      <div class="window-reset" id="ctx-tok">${used} / ${formatTokens(s.windowSize)}</div>
     </div>
+  </section>`;
+}
+
+function chartBlock(s: HudSnapshot): string {
+  return `  <section class="block chart-block">
+    <h3>分时段用量 (最近 24h)</h3>
+    <div id="chart-area">${renderHourlyChartHtml(s.hourlyBuckets)}</div>
   </section>`;
 }
 
@@ -360,4 +329,30 @@ const DASHBOARD_CSS = `
   }
   .card-footer a:hover { opacity: 1; }
   .msg { padding: 24px 16px; color: #8a8a92; white-space: pre-wrap; line-height: 1.6; font-size: 12px; }
+  .chart-block h3 { margin-bottom: 8px; }
+  .chart {
+    display: flex; align-items: flex-end; gap: 4px;
+    height: 120px; padding: 8px 0; border-bottom: 1px solid #2a2a30;
+  }
+  .chart-col {
+    flex: 1; display: flex; flex-direction: column-reverse;
+    min-width: 10px; border-radius: 3px 3px 0 0; overflow: hidden;
+    position: relative;
+  }
+  .chart-col .seg { min-height: 1px; }
+  .chart-col:hover { filter: brightness(1.2); }
+  .chart-col:hover::after {
+    content: attr(data-tip); position: absolute; bottom: 100%; left: 50%;
+    transform: translateX(-50%); white-space: nowrap;
+    background: #000; color: #fff; padding: 4px 8px; border-radius: 4px;
+    font-size: 10px; pointer-events: none; z-index: 10;
+  }
+  .chart-axis { display: flex; gap: 4px; padding-top: 4px; }
+  .chart-axis span { flex: 1; text-align: center; font-size: 10px; color: #7a7a82; min-width: 10px; }
+  .chart-empty { color: #7a7a82; font-size: 12px; padding: 16px 0; text-align: center; }
+  .chart-legend { font-size: 10px; color: #8a8a92; padding-top: 6px; display: flex; gap: 10px; align-items: center; }
+  .chart-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+  .chart-legend .seg-input { background: #00bfff; }
+  .chart-legend .seg-output { background: #ff6347; }
+  .chart-legend .seg-cache { background: #9b8bcf; }
 `;
