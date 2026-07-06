@@ -134,10 +134,12 @@ export class DetailPanelManager {
                   b.cacheTokens>0?'<div class="seg seg-cache" style="flex:'+b.cacheTokens+';background:#9b8bcf"></div>':''].join('');
       const tip=esc(b.hour.slice(0,16).replace('T',' '))+' · in '+fmtTok(b.inputTokens)+' · out '+fmtTok(b.outputTokens)+' · cache '+fmtTok(b.cacheTokens);
       return '<div class="chart-col" style="height:'+h+'%" data-tip="'+tip+'">'+segs+'</div>';
-    }).join('')+'</div><div class="chart-axis">'+nz.map(b=>'<span>'+b.hour.slice(11,13)+'</span>').join('')+'</div>';
+    }).join('')+'</div><div class="chart-axis">'+nz.map(b=>'<span>'+b.hour.slice(11,13)+'</span>').join('')+'</div>'
+    + '<div class="chart-legend"><span class="dot seg-input"></span> input <span class="dot seg-output"></span> output <span class="dot seg-cache"></span> cache</div>';
   }
   function setText(id, v){ const el=document.getElementById(id); if(el) el.textContent = v; }
   function renderAll(snap){
+    const u = snap.usage;
     renderChart(snap.hourlyBuckets);
     if(snap.sessionCostYuan!==null){
       setText('cost', '≈¥'+snap.sessionCostYuan.toFixed(2));
@@ -150,13 +152,29 @@ export class DetailPanelManager {
       const used = snap.contextTokens ? (snap.contextTokens.inputTokens+snap.contextTokens.cacheCreationTokens+snap.contextTokens.cacheReadTokens) : 0;
       setText('ctx-tok', fmtTok(used)+' / '+fmtTok(snap.windowSize));
     }
+    if(u){
+      const upd = (id, p, resetAt) => {
+        setText(id+'-pct', p===null||p===undefined?'—':Math.round(p)+'%');
+        // reset countdown formatting matching renderCountdownShort
+        let txt = '—';
+        if(resetAt){
+          const ms = Date.parse(resetAt) - Date.now();
+          if(ms<=0) txt='soon';
+          else { const m=Math.round(ms/60000); if(m<1)txt='<1m'; else if(m<60)txt=m+'m'; else { const h=Math.floor(m/60),mm=m%60; if(h<48)txt=mm>0?h+'h '+mm+'m':h+'h'; else { const d=Math.floor(h/24),rh=h%24; txt=rh>0?d+'d '+rh+'h':d+'d'; } } }
+          setText(id+'-reset', '重置 '+txt);
+        }
+      };
+      upd('w5', u.fiveHourPercent, u.fiveHourResetAt);
+      upd('w7', u.sevenDayPercent, u.sevenDayResetAt);
+      upd('wm', null, null);
+    }
   }
   renderAll(initial);
   window.addEventListener('message', e => { if(e.data) renderAll(e.data); });
 </script>
 </body>
 </html>`;
-    return html.replace('__SNAPSHOT_JSON__', JSON.stringify(s));
+    return html.replace('__SNAPSHOT_JSON__', JSON.stringify(s).replace(/</g, '\\u003c').replace(/>/g, '\\u003e'));
   }
 
   private shellHtml(message: string): string {
@@ -174,9 +192,9 @@ export class DetailPanelManager {
 
 function resetBlock(u: ProviderUsage | null): string {
   const rows = [
-    windowRow('5小时', u?.fiveHourPercent ?? null, u?.fiveHourResetAt ?? null, 'coral'),
-    windowRow('每周', u?.sevenDayPercent ?? null, u?.sevenDayResetAt ?? null, 'coral'),
-    windowRow('每月', null, null, 'coral'),
+    windowRow('5小时', u?.fiveHourPercent ?? null, u?.fiveHourResetAt ?? null, 'coral', 'w5'),
+    windowRow('每周', u?.sevenDayPercent ?? null, u?.sevenDayResetAt ?? null, 'coral', 'w7'),
+    windowRow('每月', null, null, 'coral', 'wm'),
   ];
   return `  <section class="block">
     <h3>计划重置</h3>
@@ -184,7 +202,7 @@ function resetBlock(u: ProviderUsage | null): string {
   </section>`;
 }
 
-function windowRow(label: string, percent: number | null, resetAt: Date | null, accent: string): string {
+function windowRow(label: string, percent: number | null, resetAt: Date | null, accent: string, id: string): string {
   const pct = percent ?? 0;
   const level = quotaLevel(percent);
   const countdown = renderCountdownShort(resetAt);
@@ -192,10 +210,10 @@ function windowRow(label: string, percent: number | null, resetAt: Date | null, 
   return `    <div class="window">
       <div class="window-head">
         <span class="window-label">${levelDot(level)} ${escapeHtml(label)}</span>
-        <span class="window-pct">${showData ? renderPercent(percent) : '—'}</span>
+        <span class="window-pct" id="${id}-pct">${showData ? renderPercent(percent) : '—'}</span>
       </div>
       <div class="bar-track"><div class="bar-fill ${accent}" style="width:${showData ? pct : 0}%"></div></div>
-      <div class="window-reset">${showData ? `重置 ${escapeHtml(countdown)}` : '不可用'}</div>
+      <div class="window-reset" id="${id}-reset">${showData ? `重置 ${escapeHtml(countdown)}` : '不可用'}</div>
     </div>`;
 }
 
@@ -323,11 +341,6 @@ const DASHBOARD_CSS = `
   .kv .value { font-weight: 600; color: #f0f0f2; font-variant-numeric: tabular-nums; }
   .kv.muted, .kv.muted .value { color: #8a8a92; font-weight: 400; }
   .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
-  .card-footer { padding: 10px 16px; text-align: right; }
-  .card-footer a {
-    color: #6a9955; font-size: 11px; text-decoration: none; cursor: pointer; opacity: 0.8;
-  }
-  .card-footer a:hover { opacity: 1; }
   .msg { padding: 24px 16px; color: #8a8a92; white-space: pre-wrap; line-height: 1.6; font-size: 12px; }
   .chart-block h3 { margin-bottom: 8px; }
   .chart {
