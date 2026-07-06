@@ -1,7 +1,7 @@
 {
   "name": "claude-hud-vscode",
   "displayName": "Claude HUD for VS Code",
-  "description": "Context & model-call usage for Claude Code, surfaced as a VSCode status bar item with a click-through detail panel. Mirrors the claude-hud terminal statusline experience.",
+  "description": "Track Claude Code context and usage right in your status bar — no terminal needed.",
   "version": "0.2.0",
   "publisher": "tsungseu",
   "license": "MIT",
