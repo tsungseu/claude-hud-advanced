@@ -1,10 +1,11 @@
 {
   "name": "claude-hud-vscode",
-  "displayName": "Claude HUD",
+  "displayName": "Claude HUD for VS Code",
   "description": "Context & model-call usage for Claude Code, surfaced as a VSCode status bar item with a click-through detail panel. Mirrors the claude-hud terminal statusline experience.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "tsungseu",
   "license": "MIT",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -107,6 +108,7 @@
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.21.0",
+    "sharp": "^0.35.3",
     "typescript": "^5.4.0"
   }
 }
