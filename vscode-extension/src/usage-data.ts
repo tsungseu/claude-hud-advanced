@@ -16,7 +16,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { getClaudeConfigDir, getClaudeSettingsPath } from './claude-config-dir';
+import { getClaudeConfigDir, getClaudeSettingsPath, getProjectsDir } from './claude-config-dir';
+import { encodeProjectDir } from './transcript-resolver';
 
 /** Token breakdown of the last assistant turn, used to derive context fill. */
 export interface ContextTokens {
@@ -80,6 +81,8 @@ export interface HudSnapshot {
   modelId: string;
   /** Overall provider freshness state for the status badge. */
   snapshotStatus: SnapshotStatus;
+  /** Per-hour token usage over the last 24h, for the chart. */
+  hourlyBuckets: HourlyBucket[];
   /** ISO timestamp this snapshot was assembled. */
   collectedAt: string;
 }
@@ -629,6 +632,10 @@ export function collectHudSnapshot(
     }
   }
 
+  const hourlyBuckets = workspaceFolder
+    ? readHourlyUsage(path.join(getProjectsDir(), encodeProjectDir(workspaceFolder)), Date.now())
+    : [];
+
   // Cost: look up pricing by exact model id, then by the suffix-stripped form.
   const pricing = options.pricing ?? {};
   const pricingEntry = pricing[modelId] ?? pricing[stripContextSuffix(modelId)] ?? null;
@@ -647,6 +654,7 @@ export function collectHudSnapshot(
     sessionCostYuan,
     modelId,
     snapshotStatus,
+    hourlyBuckets,
     collectedAt: new Date().toISOString(),
   };
 }
