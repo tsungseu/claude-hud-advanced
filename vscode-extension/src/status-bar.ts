@@ -110,12 +110,12 @@ export class StatusBarManager {
     const ctxBar = renderBar(snapshot.contextPercent, 8);
     const ctxPct = renderPercent(snapshot.contextPercent);
 
-    let text = `${prefix} ${ctxBar} ${ctxPct}`;
+    let text = `${prefix} ctx ${ctxBar} ${ctxPct}`;
 
     if (usagePct !== null) {
       const usageBar = renderBar(usagePct, 8);
       const reset = renderResetCountdown(snapshot.usage?.fiveHourResetAt ?? snapshot.usage?.sevenDayResetAt ?? null);
-      text += `  │  ${usageBar} ${renderPercent(usagePct)}` + (reset ? ` (${reset})` : '');
+      text += `  │  5h ${usageBar} ${renderPercent(usagePct)}` + (reset ? ` (${reset})` : '');
     } else if (snapshot.usage?.balanceLabel) {
       text += `  │  ${snapshot.usage.balanceLabel}`;
     } else {
@@ -166,8 +166,6 @@ export class StatusBarManager {
     md.appendMarkdown('|---|---|---|\n');
     md.appendMarkdown(windowRow('5小时', s.usage?.fiveHourPercent ?? null, s.usage?.fiveHourResetAt ?? null));
     md.appendMarkdown(windowRow('每周', s.usage?.sevenDayPercent ?? null, s.usage?.sevenDayResetAt ?? null));
-    // Monthly window: GLM API doesn't expose it — show placeholder.
-    md.appendMarkdown(windowRow('每月', null, null));
     md.appendMarkdown('\n');
 
     // --- Block 2: 积分 / 支出 / 成本扫描 ---
