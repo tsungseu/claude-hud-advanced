@@ -20,14 +20,20 @@
   "homepage": "https://github.com/tsungseu/claude-hud-advanced/tree/main/vscode-extension",
   "categories": [
     "Other",
+    "Machine Learning",
     "Visualization"
   ],
   "keywords": [
-    "claude-code",
     "claude",
+    "claude-code",
+    "glm",
+    "glm-5.2",
+    "minimax",
+    "alibaba",
+    "kimi",
+    "hud",
     "usage",
     "context",
-    "hud",
     "statusline"
   ],
   "main": "./dist/extension.js",
