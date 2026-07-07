@@ -34,13 +34,13 @@ export interface SessionTokens {
   cacheReadTokens: number;
 }
 
-/** One hour's accumulated TOTAL token usage, for the per-hour usage chart.
- * The reference design shows a single-color bar per hour (input + output +
+/** One day's accumulated TOTAL token usage, for the 30-day daily usage chart.
+ * The reference design shows a single-color bar per day (input + output +
  * cache combined), NOT a stacked breakdown — hence one `tokens` field. */
-export interface HourlyBucket {
-  /** Hour key, ISO truncated to the hour: YYYY-MM-DDTHH:00:00.000Z */
-  hour: string;
-  /** input + output + cache_creation + cache_read for that hour. */
+export interface DailyBucket {
+  /** Day key, ISO date YYYY-MM-DD (UTC). */
+  day: string;
+  /** input + output + cache_creation + cache_read for that day. */
   tokens: number;
 }
 
@@ -81,8 +81,8 @@ export interface HudSnapshot {
   modelId: string;
   /** Overall provider freshness state for the status badge. */
   snapshotStatus: SnapshotStatus;
-  /** Per-hour total token usage over the last 24h, for the chart. */
-  hourlyBuckets: HourlyBucket[];
+  /** Per-day total token usage over the last 30 days, for the chart. */
+  dailyBuckets: DailyBucket[];
   /** ISO timestamp this snapshot was assembled. */
   collectedAt: string;
 }
@@ -235,16 +235,16 @@ export function readSessionTokenTotals(transcriptPath: string): SessionTokens | 
 
 /**
  * Read ALL transcripts under a project dir and bucket assistant-turn token
- * usage by HOUR (UTC), keeping only the last 24h. Consecutive duplicate
- * usage blocks are skipped (same dedup as readSessionTokenTotals). Each hour's
+ * usage by DAY (UTC), keeping only the last 30 days. Consecutive duplicate
+ * usage blocks are skipped (same dedup as readSessionTokenTotals). Each day's
  * bucket holds the TOTAL tokens (input + output + cache_creation + cache_read)
  * — a single combined metric matching the reference design's single-color
- * bars. Returns buckets sorted ascending by hour; empty array if the dir is
- * missing/empty.
+ * bars. Returns a CONTINUOUS 30-day axis (every day in the window, even idle
+ * days with zero tokens) sorted ascending; empty array if the dir is missing.
  *
  * `projectDir` is the encoded ~/.claude/projects/<encoded-cwd> path.
  */
-export function readHourlyUsage(projectDir: string, now: number): HourlyBucket[] {
+export function readDailyUsage(projectDir: string, now: number): DailyBucket[] {
   let files: string[];
   try {
     files = fs.readdirSync(projectDir).filter((f) => f.endsWith('.jsonl'));
@@ -252,8 +252,8 @@ export function readHourlyUsage(projectDir: string, now: number): HourlyBucket[]
     return [];
   }
 
-  const windowStart = now - 24 * 60 * 60 * 1000;
-  const buckets = new Map<string, HourlyBucket>();
+  const windowStart = now - 30 * 24 * 60 * 60 * 1000;
+  const buckets = new Map<string, DailyBucket>();
 
   for (const name of files) {
     const full = path.join(projectDir, name);
@@ -300,32 +300,30 @@ export function readHourlyUsage(projectDir: string, now: number): HourlyBucket[]
       if (key === lastKey) continue;
       lastKey = key;
 
-      // Truncate to the hour: YYYY-MM-DDTHH:00:00.000Z
+      // Truncate to the UTC day: YYYY-MM-DD
       const d = new Date(ts);
-      d.setUTCMinutes(0, 0, 0);
-      const hour = d.toISOString();
+      const day = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 
-      let b = buckets.get(hour);
+      let b = buckets.get(day);
       if (!b) {
-        b = { hour, tokens: 0 };
-        buckets.set(hour, b);
+        b = { day, tokens: 0 };
+        buckets.set(day, b);
       }
       b.tokens += inT + outT + ccT + crT;
     }
   }
 
-  // Fill a CONTINUOUS 24-hour axis: every hour in (now-24h, now] gets a
+  // Fill a CONTINUOUS 30-day axis: every day in (now-30d, today] gets a
   // bucket, even when tokens=0, so the chart shows the full timeline with
-  // zero-height bars for idle hours (matches the reference). We truncate to
-  // the hour and walk 24 steps back from the current hour.
-  const result: HourlyBucket[] = [];
+  // zero-height bars for idle days. Walk 30 steps back from today (UTC).
+  const result: DailyBucket[] = [];
   const end = new Date(now);
-  end.setUTCMinutes(0, 0, 0);
-  for (let i = 23; i >= 0; i--) {
-    const d = new Date(end.getTime() - i * 3600_000);
-    const hour = d.toISOString();
-    const b = buckets.get(hour);
-    result.push(b ?? { hour, tokens: 0 });
+  end.setUTCHours(0, 0, 0, 0);
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(end.getTime() - i * 86_400_000);
+    const day = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    const b = buckets.get(day);
+    result.push(b ?? { day, tokens: 0 });
   }
   return result;
 }
@@ -646,8 +644,8 @@ export function collectHudSnapshot(
     }
   }
 
-  const hourlyBuckets = workspaceFolder
-    ? readHourlyUsage(path.join(getProjectsDir(), encodeProjectDir(workspaceFolder)), Date.now())
+  const dailyBuckets = workspaceFolder
+    ? readDailyUsage(path.join(getProjectsDir(), encodeProjectDir(workspaceFolder)), Date.now())
     : [];
 
   // Cost: look up pricing by exact model id, then by the suffix-stripped form.
@@ -668,7 +666,7 @@ export function collectHudSnapshot(
     sessionCostYuan,
     modelId,
     snapshotStatus,
-    hourlyBuckets,
+    dailyBuckets,
     collectedAt: new Date().toISOString(),
   };
 }

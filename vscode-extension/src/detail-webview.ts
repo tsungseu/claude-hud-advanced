@@ -1,10 +1,10 @@
 // The click-through dashboard panel: a styled usage card matching the reference
-// design (dark card, cyan context bar, coral usage bar, status dot, per-hour
-// token-usage chart). Built as a webview so we get full CSS color control (the
-// hover tooltip's MarkdownString can't do custom colors). The HTML is seeded
-// once on open with the current snapshot inlined; subsequent snapshots are
-// pushed via postMessage and applied to the DOM by the inline script (no full
-// re-render).
+// design (dark card, cyan context bar, coral usage bar, status dot, 30-day
+// daily token-usage chart). Built as a webview so we get full CSS color control
+// (the hover tooltip's MarkdownString can't do custom colors). The HTML is
+// seeded once on open with the current snapshot inlined; subsequent snapshots
+// are pushed via postMessage and applied to the DOM by the inline script (no
+// full re-render).
 import * as vscode from 'vscode';
 import {
   contextLevel,
@@ -15,7 +15,7 @@ import {
   type Level,
 } from './bar';
 import type { HudSnapshot, ProviderUsage } from './usage-data';
-import { renderHourlyChartHtml } from './chart-html';
+import { renderDailyChartHtml } from './chart-html';
 
 export class DetailPanelManager {
   private panel: vscode.WebviewPanel | null = null;
@@ -126,25 +126,24 @@ export class DetailPanelManager {
   function renderChart(buckets){
     const el = document.getElementById('chart-area'); if(!el) return;
     const all = buckets||[];
-    if(!all.length){ el.innerHTML = '<div class="chart-empty">最近 24h 无用量数据</div>'; return; }
+    if(!all.length){ el.innerHTML = '<div class="chart-empty">最近 30 天无用量数据</div>'; return; }
     const max = Math.max(...all.map(b=>b.tokens||0),1);
     // "nice" Y axis: round max up to 1/2/5×10^k, 4 ticks.
     const exp=Math.pow(10,Math.floor(Math.log10(max)));
     const frac=max/exp; let nf; if(frac<=1)nf=1; else if(frac<=2)nf=2; else if(frac<=5)nf=5; else nf=10;
     const scaledMax=nf*exp;
     const ticks=[0,1,2,3].map(i=>fmtTok(scaledMax*i/3));
-    // sparse X labels: ~1 per 3 hours, always the last.
-    const n=all.length, target=Math.min(8,Math.max(2,Math.round(n/3))), labelIdx=new Set();
+    // sparse X labels: ~1 per 5 days, always the last.
+    const n=all.length, target=Math.min(6,Math.max(2,Math.round(n/5))), labelIdx=new Set();
     if(n===1) labelIdx.add(0); else for(let i=0;i<target;i++) labelIdx.add(Math.round(i*(n-1)/(target-1)));
-    const pad=x=>String(x).padStart(2,'0');
-    const range=hour=>{ const s=parseInt(hour.slice(11,13),10); const e=(s+1)%24; return pad(s)+':00-'+pad(e)+':00'; };
+    const shortDate=day=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(day); return m?(parseInt(m[2],10)+'/'+parseInt(m[3],10)):day; };
     const bars=all.map((b,i)=>{
       const h=((b.tokens||0)/scaledMax*100).toFixed(1);
-      const tip=esc(range(b.hour))+' · '+fmtTok(b.tokens||0)+' tokens';
+      const tip=esc(b.day)+' · '+fmtTok(b.tokens||0)+' tokens';
       return '<div class="chart-bar" style="height:'+h+'%" data-tip="'+tip+'"></div>';
     }).join('');
     const yAxisHtml=ticks.slice().reverse().map(t=>'<div class="chart-ytick"><span>'+esc(t)+'</span></div>').join('');
-    const xAxisHtml=all.map((b,i)=>'<span>'+(labelIdx.has(i)?esc(range(b.hour)):'')+'</span>').join('');
+    const xAxisHtml=all.map((b,i)=>'<span>'+(labelIdx.has(i)?esc(shortDate(b.day)):'')+'</span>').join('');
     el.innerHTML='<div class="chart-wrap"><div class="chart-yaxis">'+yAxisHtml+'</div>'
       +'<div class="chart-plot"><div class="chart">'+bars+'</div>'
       +'<div class="chart-xaxis">'+xAxisHtml+'</div></div></div>';
@@ -153,7 +152,7 @@ export class DetailPanelManager {
   function setWidth(id, v){ const el=document.getElementById(id); if(el) el.style.width = v+'%'; }
   function renderAll(snap){
     const u = snap.usage;
-    renderChart(snap.hourlyBuckets);
+    renderChart(snap.dailyBuckets);
     if(snap.sessionCostYuan!==null){
       setText('cost', '≈¥'+snap.sessionCostYuan.toFixed(2));
     }
@@ -269,8 +268,8 @@ function contextBlock(s: HudSnapshot): string {
 
 function chartBlock(s: HudSnapshot): string {
   return `  <section class="block chart-block">
-    <h3>分时段用量 (最近 24h)</h3>
-    <div id="chart-area">${renderHourlyChartHtml(s.hourlyBuckets)}</div>
+    <h3>每日用量 (最近 30 天)</h3>
+    <div id="chart-area">${renderDailyChartHtml(s.dailyBuckets)}</div>
   </section>`;
 }
 

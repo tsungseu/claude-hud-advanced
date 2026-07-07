@@ -1,12 +1,13 @@
-// Pure HTML generator for the per-hour usage chart. No vscode API, no IO —
-// consumes HourlyBucket[] and returns an HTML string. Unit-testable.
+// Pure HTML generator for the 30-day daily-usage chart. No vscode API, no IO —
+// consumes DailyBucket[] and returns an HTML string. Unit-testable.
 //
 // Design (matches the reference): a wide, short bar chart — one cyan bar per
-// HOUR over the last 24h, height = that hour's total tokens scaled to the
-// busiest hour. Horizontal gridlines + a Y axis with ~4 ticks, sparse X-axis
-// hour labels (every ~3h so ~24 bars stay readable), hover tooltips. Single
+// DAY over the last 30 days, height = that day's total tokens scaled to the
+// busiest day. The full timeline renders (idle days are zero-height bars, not
+// dropped) so every slot is a consecutive day. Horizontal gridlines + a Y axis
+// with ~4 ticks, sparse X-axis date labels (M/D), hover tooltips. Single
 // color, NOT a stacked breakdown.
-import type { HourlyBucket } from './usage-data';
+import type { DailyBucket } from './usage-data';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -23,28 +24,20 @@ function formatK(n: number): string {
   return String(n);
 }
 
-/** Extract the HH from an ISO hour key "YYYY-MM-DDTHH:00:00.000Z" -> "HH". */
-function hourHH(hour: string): number {
-  return parseInt(hour.slice(11, 13), 10);
-}
-
-/** Build an hour-range label for the X axis, e.g. hour=13 -> "13:00-14:00".
- * 23 wraps to 0 ("23:00-00:00"). */
-function hourRangeLabel(hour: string): string {
-  const start = hourHH(hour);
-  const end = (start + 1) % 24;
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(start)}:00-${p(end)}:00`;
+/** Shorten YYYY-MM-DD to M/D for axis labels (e.g. "2026-07-03" -> "7/3"). */
+function shortDate(day: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!m) return day;
+  return `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
 }
 
 /**
- * Pick evenly-spaced X-axis label indices across the buckets (~1 label per
- * 3 hours) so the axis isn't crowded when there are up to ~24 bars. Always
- * includes the last.
+ * Pick evenly-spaced X-axis label indices across the buckets (~6 labels for
+ * 30 days) so the axis isn't crowded. Always includes the last.
  */
 function sparseLabelIndices(n: number): Set<number> {
   if (n <= 1) return new Set(n === 1 ? [0] : []);
-  const target = Math.min(8, Math.max(2, Math.round(n / 3)));
+  const target = Math.min(6, Math.max(2, Math.round(n / 5)));
   const set = new Set<number>();
   for (let i = 0; i < target; i++) {
     set.add(Math.round((i * (n - 1)) / (target - 1)));
@@ -70,18 +63,16 @@ function yAxis(max: number): { ticks: string[]; scaledMax: number } {
 }
 
 /**
- * Render the per-hour usage chart as an HTML string. Each non-zero hour is a
- * single cyan bar; the busiest hour is full height and others scale relative
- * to it. Includes a Y axis with ~4 ticks, horizontal gridlines, sparse X-axis
- * hour labels, and per-bar hover tooltips. Returns a placeholder message when
- * buckets is empty.
+ * Render the 30-day daily-usage chart as an HTML string. The full timeline is
+ * rendered: idle days show as zero-height bars so every slot is a consecutive
+ * day. The busiest day is full height and others scale relative to it.
+ * Includes a Y axis with ~4 ticks, horizontal gridlines, sparse X-axis date
+ * labels, and per-bar hover tooltips. Returns a placeholder message when the
+ * bucket array itself is empty.
  */
-export function renderHourlyChartHtml(buckets: HourlyBucket[]): string {
-  // The full 24h timeline is rendered: idle hours show as zero-height bars so
-  // every slot is a consecutive hour range (5:00-6:00, 6:00-7:00, ...). An
-  // entirely empty array (no buckets at all) still shows the placeholder.
+export function renderDailyChartHtml(buckets: DailyBucket[]): string {
   if (buckets.length === 0) {
-    return `<div class="chart-empty">最近 24h 无用量数据</div>`;
+    return `<div class="chart-empty">最近 30 天无用量数据</div>`;
   }
 
   const maxTotal = Math.max(...buckets.map((b) => b.tokens), 1);
@@ -91,7 +82,7 @@ export function renderHourlyChartHtml(buckets: HourlyBucket[]): string {
   const bars = buckets
     .map((b) => {
       const h = scaledMax > 0 ? (b.tokens / scaledMax) * 100 : 0;
-      const tip = `${escapeAttr(hourRangeLabel(b.hour))} · ${formatK(b.tokens)} tokens`;
+      const tip = `${escapeAttr(b.day)} · ${formatK(b.tokens)} tokens`;
       return `<div class="chart-bar" style="height:${h.toFixed(1)}%" data-tip="${escapeAttr(tip)}"></div>`;
     })
     .join('');
@@ -103,10 +94,9 @@ export function renderHourlyChartHtml(buckets: HourlyBucket[]): string {
     .map((t) => `<div class="chart-ytick"><span>${escapeHtml(t)}</span></div>`)
     .join('');
 
-  // X-axis: one slot per bar; show the hour-range label only at sparse indices
-  // so ~24 bars stay readable.
+  // X-axis: one slot per bar; show the date label only at sparse indices.
   const xAxisHtml = buckets
-    .map((b, i) => `<span>${labelIdx.has(i) ? escapeHtml(hourRangeLabel(b.hour)) : ''}</span>`)
+    .map((b, i) => `<span>${labelIdx.has(i) ? escapeHtml(shortDate(b.day)) : ''}</span>`)
     .join('');
 
   return `<div class="chart-wrap">

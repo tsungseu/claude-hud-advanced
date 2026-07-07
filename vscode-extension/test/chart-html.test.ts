@@ -1,22 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderHourlyChartHtml } from '../src/chart-html';
-import type { HourlyBucket } from '../src/usage-data';
+import { renderDailyChartHtml } from '../src/chart-html';
+import type { DailyBucket } from '../src/usage-data';
 
-test('renderHourlyChartHtml returns placeholder for empty buckets', () => {
-  const html = renderHourlyChartHtml([]);
-  assert.match(html, /最近 24h 无用量数据/);
+test('renderDailyChartHtml returns placeholder for empty buckets', () => {
+  const html = renderDailyChartHtml([]);
+  assert.match(html, /最近 30 天无用量数据/);
   assert.doesNotMatch(html, /chart-bar/);
 });
 
-test('renderHourlyChartHtml renders one bar per bucket (including zero buckets) with hour-range labels', () => {
-  const buckets: HourlyBucket[] = [
-    { hour: '2026-07-06T12:00:00.000Z', tokens: 100 },
-    { hour: '2026-07-06T13:00:00.000Z', tokens: 0 },
-    { hour: '2026-07-06T14:00:00.000Z', tokens: 300 },
+test('renderDailyChartHtml renders one bar per bucket (including zero days) — continuous timeline', () => {
+  const buckets: DailyBucket[] = [
+    { day: '2026-07-04', tokens: 100 },
+    { day: '2026-07-05', tokens: 0 },
+    { day: '2026-07-06', tokens: 300 },
   ];
-  const html = renderHourlyChartHtml(buckets);
-  // ALL buckets render (idle hours are NOT filtered out — continuous timeline).
+  const html = renderDailyChartHtml(buckets);
+  // ALL buckets render (idle days are NOT filtered out — continuous timeline).
   const barCount = (html.match(/chart-bar/g) || []).length;
   assert.equal(barCount, 3);
   // Y axis ticks present.
@@ -27,30 +27,27 @@ test('renderHourlyChartHtml renders one bar per bucket (including zero buckets) 
   assert.doesNotMatch(html, /chart-legend/);
 });
 
-test('renderHourlyChartHtml scales bar height by the max-tokens hour', () => {
-  const buckets: HourlyBucket[] = [
-    { hour: '2026-07-06T13:00:00.000Z', tokens: 100 },
-    { hour: '2026-07-06T14:00:00.000Z', tokens: 400 },
+test('renderDailyChartHtml scales bar height by the max-tokens day', () => {
+  const buckets: DailyBucket[] = [
+    { day: '2026-07-05', tokens: 100 },
+    { day: '2026-07-06', tokens: 400 },
   ];
-  const html = renderHourlyChartHtml(buckets);
+  const html = renderDailyChartHtml(buckets);
   const heights = [...html.matchAll(/height:\s*([0-9.]+)%/g)].map((m) => parseFloat(m[1]));
   assert.ok(heights.length >= 2);
   assert.ok(Math.max(...heights) > Math.min(...heights));
 });
 
-test('renderHourlyChartHtml tooltip + sparse labels use HH:00-HH:00 hour-range format', () => {
-  // 5 hours so a sparse label index lands on the first bar.
-  const buckets: HourlyBucket[] = [
-    { hour: '2026-07-06T05:00:00.000Z', tokens: 12345 },
-    { hour: '2026-07-06T06:00:00.000Z', tokens: 0 },
-    { hour: '2026-07-06T07:00:00.000Z', tokens: 0 },
-    { hour: '2026-07-06T08:00:00.000Z', tokens: 0 },
-    { hour: '2026-07-06T09:00:00.000Z', tokens: 0 },
+test('renderDailyChartHtml tooltip uses YYYY-MM-DD + token total; sparse X labels use M/D', () => {
+  // 5 days so a sparse label index lands on the first bar.
+  const buckets: DailyBucket[] = [
+    { day: '2026-07-03', tokens: 12345 },
+    { day: '2026-07-04', tokens: 0 },
+    { day: '2026-07-05', tokens: 0 },
+    { day: '2026-07-06', tokens: 0 },
+    { day: '2026-07-07', tokens: 0 },
   ];
-  const html = renderHourlyChartHtml(buckets);
-  // Tooltip on the 05:00 bar shows the range + formatted total.
-  assert.match(html, /data-tip="05:00-06:00 · 12\.3k tokens"/);
-  // The 23:00 wrap case renders 23:00-00:00, not 23:00-24:00.
-  const wrapHtml = renderHourlyChartHtml([{ hour: '2026-07-06T23:00:00.000Z', tokens: 1 }]);
-  assert.match(wrapHtml, /23:00-00:00/);
+  const html = renderDailyChartHtml(buckets);
+  // Tooltip on the 2026-07-03 bar shows the date + formatted total.
+  assert.match(html, /data-tip="2026-07-03 · 12\.3k tokens"/);
 });
