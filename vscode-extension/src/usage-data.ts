@@ -34,14 +34,14 @@ export interface SessionTokens {
   cacheReadTokens: number;
 }
 
-/** One hour's accumulated token usage, for the per-hour usage chart. */
-export interface HourlyBucket {
-  /** Hour key, ISO truncated to the hour: YYYY-MM-DDTHH:00:00.000Z */
-  hour: string;
-  inputTokens: number;
-  outputTokens: number;
-  /** cache_creation + cache_read combined into one layer. */
-  cacheTokens: number;
+/** One day's accumulated TOTAL token usage, for the 31-day daily usage chart.
+ * The reference design shows a single-color bar per day (input + output +
+ * cache combined), NOT a stacked breakdown — hence one `tokens` field. */
+export interface DailyBucket {
+  /** Day key, ISO date YYYY-MM-DD (UTC). */
+  day: string;
+  /** input + output + cache_creation + cache_read for that day. */
+  tokens: number;
 }
 
 export type SnapshotStatus = 'fresh' | 'stale' | 'missing';
@@ -81,8 +81,8 @@ export interface HudSnapshot {
   modelId: string;
   /** Overall provider freshness state for the status badge. */
   snapshotStatus: SnapshotStatus;
-  /** Per-hour token usage over the last 24h, for the chart. */
-  hourlyBuckets: HourlyBucket[];
+  /** Per-day total token usage over the last 31 days, for the chart. */
+  dailyBuckets: DailyBucket[];
   /** ISO timestamp this snapshot was assembled. */
   collectedAt: string;
 }
@@ -235,13 +235,16 @@ export function readSessionTokenTotals(transcriptPath: string): SessionTokens | 
 
 /**
  * Read ALL transcripts under a project dir and bucket assistant-turn token
- * usage by hour, keeping only the last 24h. Consecutive duplicate usage
- * blocks are skipped (same dedup as readSessionTokenTotals). Returns buckets
- * sorted ascending by hour; empty array if the dir is missing/empty.
+ * usage by DAY (UTC), keeping only the last 31 days. Consecutive duplicate
+ * usage blocks are skipped (same dedup as readSessionTokenTotals). Each day's
+ * bucket holds the TOTAL tokens (input + output + cache_creation + cache_read)
+ * — a single combined metric matching the reference design's single-color
+ * bars. Returns buckets sorted ascending by day; empty array if the dir is
+ * missing/empty.
  *
  * `projectDir` is the encoded ~/.claude/projects/<encoded-cwd> path.
  */
-export function readHourlyUsage(projectDir: string, now: number): HourlyBucket[] {
+export function readDailyUsage(projectDir: string, now: number): DailyBucket[] {
   let files: string[];
   try {
     files = fs.readdirSync(projectDir).filter((f) => f.endsWith('.jsonl'));
@@ -249,8 +252,8 @@ export function readHourlyUsage(projectDir: string, now: number): HourlyBucket[]
     return [];
   }
 
-  const windowStart = now - 24 * 60 * 60 * 1000;
-  const buckets = new Map<string, HourlyBucket>();
+  const windowStart = now - 31 * 24 * 60 * 60 * 1000;
+  const buckets = new Map<string, DailyBucket>();
 
   for (const name of files) {
     const full = path.join(projectDir, name);
@@ -297,23 +300,20 @@ export function readHourlyUsage(projectDir: string, now: number): HourlyBucket[]
       if (key === lastKey) continue;
       lastKey = key;
 
-      // Truncate to the hour: YYYY-MM-DDTHH:00:00.000Z
+      // Truncate to the UTC day: YYYY-MM-DD
       const d = new Date(ts);
-      d.setUTCMinutes(0, 0, 0);
-      const hour = d.toISOString();
+      const day = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 
-      let b = buckets.get(hour);
+      let b = buckets.get(day);
       if (!b) {
-        b = { hour, inputTokens: 0, outputTokens: 0, cacheTokens: 0 };
-        buckets.set(hour, b);
+        b = { day, tokens: 0 };
+        buckets.set(day, b);
       }
-      b.inputTokens += inT;
-      b.outputTokens += outT;
-      b.cacheTokens += ccT + crT;
+      b.tokens += inT + outT + ccT + crT;
     }
   }
 
-  return Array.from(buckets.values()).sort((a, b) => a.hour.localeCompare(b.hour));
+  return Array.from(buckets.values()).sort((a, b) => a.day.localeCompare(b.day));
 }
 
 /** Per-million-token price in yuan for a model, used for cost estimation. */
@@ -632,8 +632,8 @@ export function collectHudSnapshot(
     }
   }
 
-  const hourlyBuckets = workspaceFolder
-    ? readHourlyUsage(path.join(getProjectsDir(), encodeProjectDir(workspaceFolder)), Date.now())
+  const dailyBuckets = workspaceFolder
+    ? readDailyUsage(path.join(getProjectsDir(), encodeProjectDir(workspaceFolder)), Date.now())
     : [];
 
   // Cost: look up pricing by exact model id, then by the suffix-stripped form.
@@ -654,7 +654,7 @@ export function collectHudSnapshot(
     sessionCostYuan,
     modelId,
     snapshotStatus,
-    hourlyBuckets,
+    dailyBuckets,
     collectedAt: new Date().toISOString(),
   };
 }

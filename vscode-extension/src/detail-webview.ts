@@ -1,9 +1,10 @@
 // The click-through dashboard panel: a styled usage card matching the reference
-// design (dark card, cyan context bar, coral usage bar, status dot, per-hour
-// usage chart). Built as a webview so we get full CSS color control (the hover
-// tooltip's MarkdownString can't do custom colors). The HTML is seeded once on
-// open with the current snapshot inlined; subsequent snapshots are pushed via
-// postMessage and applied to the DOM by the inline script (no full re-render).
+// design (dark card, cyan context bar, coral usage bar, status dot, 31-day
+// daily token-usage chart). Built as a webview so we get full CSS color control
+// (the hover tooltip's MarkdownString can't do custom colors). The HTML is
+// seeded once on open with the current snapshot inlined; subsequent snapshots
+// are pushed via postMessage and applied to the DOM by the inline script (no
+// full re-render).
 import * as vscode from 'vscode';
 import {
   contextLevel,
@@ -14,7 +15,7 @@ import {
   type Level,
 } from './bar';
 import type { HudSnapshot, ProviderUsage } from './usage-data';
-import { renderHourlyChartHtml } from './chart-html';
+import { renderDailyChartHtml } from './chart-html';
 
 export class DetailPanelManager {
   private panel: vscode.WebviewPanel | null = null;
@@ -124,24 +125,34 @@ export class DetailPanelManager {
   function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function renderChart(buckets){
     const el = document.getElementById('chart-area'); if(!el) return;
-    const nz = (buckets||[]).filter(b=>b.inputTokens+b.outputTokens+b.cacheTokens>0);
-    if(!nz.length){ el.innerHTML = '<div class="chart-empty">最近 24h 无用量数据</div>'; return; }
-    const max = Math.max(...nz.map(b=>b.inputTokens+b.outputTokens+b.cacheTokens),1);
-    el.innerHTML = '<div class="chart">'+nz.map(b=>{
-      const tot=b.inputTokens+b.outputTokens+b.cacheTokens; const h=(tot/max*100).toFixed(1);
-      const segs=[b.inputTokens>0?'<div class="seg seg-input" style="flex:'+b.inputTokens+';background:#00bfff"></div>':'',
-                  b.outputTokens>0?'<div class="seg seg-output" style="flex:'+b.outputTokens+';background:#ff6347"></div>':'',
-                  b.cacheTokens>0?'<div class="seg seg-cache" style="flex:'+b.cacheTokens+';background:#9b8bcf"></div>':''].join('');
-      const tip=esc(b.hour.slice(0,16).replace('T',' '))+' · in '+fmtTok(b.inputTokens)+' · out '+fmtTok(b.outputTokens)+' · cache '+fmtTok(b.cacheTokens);
-      return '<div class="chart-col" style="height:'+h+'%" data-tip="'+tip+'">'+segs+'</div>';
-    }).join('')+'</div><div class="chart-axis">'+nz.map(b=>'<span>'+b.hour.slice(11,13)+'</span>').join('')+'</div>'
-    + '<div class="chart-legend"><span class="dot seg-input"></span> input <span class="dot seg-output"></span> output <span class="dot seg-cache"></span> cache</div>';
+    const nz = (buckets||[]).filter(b=>(b.tokens||0)>0);
+    if(!nz.length){ el.innerHTML = '<div class="chart-empty">最近 31 天无用量数据</div>'; return; }
+    const max = Math.max(...nz.map(b=>b.tokens),1);
+    // "nice" Y axis: round max up to 1/2/5×10^k, 4 ticks.
+    const exp=Math.pow(10,Math.floor(Math.log10(max)));
+    const frac=max/exp; let nf; if(frac<=1)nf=1; else if(frac<=2)nf=2; else if(frac<=5)nf=5; else nf=10;
+    const scaledMax=nf*exp;
+    const ticks=[0,1,2,3].map(i=>fmtTok(scaledMax*i/3));
+    // sparse X labels: ~4 evenly spaced indices, always the last.
+    const n=nz.length, target=Math.min(4,n), labelIdx=new Set();
+    if(n===1) labelIdx.add(0); else for(let i=0;i<target;i++) labelIdx.add(Math.round(i*(n-1)/(target-1)));
+    const shortDate=day=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(day); return m?(parseInt(m[2],10)+'/'+parseInt(m[3],10)):day; };
+    const bars=nz.map((b,i)=>{
+      const h=(b.tokens/scaledMax*100).toFixed(1);
+      const tip=esc(b.day)+' · '+fmtTok(b.tokens)+' tokens';
+      return '<div class="chart-bar" style="height:'+h+'%" data-tip="'+tip+'"></div>';
+    }).join('');
+    const yAxisHtml=ticks.slice().reverse().map(t=>'<div class="chart-ytick"><span>'+esc(t)+'</span></div>').join('');
+    const xAxisHtml=nz.map((b,i)=>'<span>'+(labelIdx.has(i)?esc(shortDate(b.day)):'')+'</span>').join('');
+    el.innerHTML='<div class="chart-wrap"><div class="chart-yaxis">'+yAxisHtml+'</div>'
+      +'<div class="chart-plot"><div class="chart">'+bars+'</div>'
+      +'<div class="chart-xaxis">'+xAxisHtml+'</div></div></div>';
   }
   function setText(id, v){ const el=document.getElementById(id); if(el) el.textContent = v; }
   function setWidth(id, v){ const el=document.getElementById(id); if(el) el.style.width = v+'%'; }
   function renderAll(snap){
     const u = snap.usage;
-    renderChart(snap.hourlyBuckets);
+    renderChart(snap.dailyBuckets);
     if(snap.sessionCostYuan!==null){
       setText('cost', '≈¥'+snap.sessionCostYuan.toFixed(2));
     }
@@ -257,8 +268,8 @@ function contextBlock(s: HudSnapshot): string {
 
 function chartBlock(s: HudSnapshot): string {
   return `  <section class="block chart-block">
-    <h3>分时段用量 (最近 24h)</h3>
-    <div id="chart-area">${renderHourlyChartHtml(s.hourlyBuckets)}</div>
+    <h3>每日用量 (最近 31 天)</h3>
+    <div id="chart-area">${renderDailyChartHtml(s.dailyBuckets)}</div>
   </section>`;
 }
 
@@ -346,29 +357,46 @@ const DASHBOARD_CSS = `
   .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
   .msg { padding: 24px 16px; color: #8a8a92; white-space: pre-wrap; line-height: 1.6; font-size: 12px; }
   .chart-block h3 { margin-bottom: 8px; }
+  /* Chart layout: a Y-axis column on the left, plot area (gridlines + bars)
+     on the right, X-axis labels under the plot. Wide and short to match the
+     reference design. */
+  .chart-wrap { display: flex; align-items: stretch; gap: 6px; }
+  .chart-yaxis {
+    display: flex; flex-direction: column; justify-content: space-between;
+    width: 30px; flex-shrink: 0; text-align: right;
+  }
+  .chart-ytick { height: 0; display: flex; align-items: center; justify-content: flex-end; }
+  .chart-ytick span { font-size: 9px; color: #7a7a82; font-variant-numeric: tabular-nums; transform: translateY(-50%); }
+  .chart-plot { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+  /* 4 horizontal gridlines via repeating-linear-gradient at 0/33/66/100%. */
   .chart {
-    display: flex; align-items: flex-end; gap: 4px;
-    height: 120px; padding: 8px 0; border-bottom: 1px solid #2a2a30;
+    display: flex; align-items: flex-end; gap: 2px;
+    height: 100px; padding: 0;
+    border-bottom: 1px solid #3a3a40;
+    background-image: repeating-linear-gradient(
+      to top,
+      transparent 0, transparent calc(100%/3 - 1px),
+      #2e2e34 calc(100%/3 - 1px), #2e2e34 calc(100%/3),
+      transparent calc(100%/3), transparent calc(200%/3 - 1px),
+      #2e2e34 calc(200%/3 - 1px), #2e2e34 calc(200%/3),
+      transparent calc(200%/3), transparent calc(300%/3 - 1px),
+      #2e2e34 calc(300%/3 - 1px), #2e2e34 calc(300%/3)
+    );
   }
-  .chart-col {
-    flex: 1; display: flex; flex-direction: column-reverse;
-    min-width: 10px; border-radius: 3px 3px 0 0; overflow: hidden;
-    position: relative;
+  .chart-bar {
+    flex: 1 1 0; min-width: 2px; border-radius: 2px 2px 0 0;
+    background: #00bfff; position: relative; opacity: 0.92;
+    box-shadow: 0 0 6px rgba(0,191,255,0.25);
+    transition: opacity 0.15s ease;
   }
-  .chart-col .seg { min-height: 1px; }
-  .chart-col:hover { filter: brightness(1.2); }
-  .chart-col:hover::after {
+  .chart-bar:hover { opacity: 1; }
+  .chart-bar:hover::after {
     content: attr(data-tip); position: absolute; bottom: 100%; left: 50%;
     transform: translateX(-50%); white-space: nowrap;
     background: #000; color: #fff; padding: 4px 8px; border-radius: 4px;
     font-size: 10px; pointer-events: none; z-index: 10;
   }
-  .chart-axis { display: flex; gap: 4px; padding-top: 4px; }
-  .chart-axis span { flex: 1; text-align: center; font-size: 10px; color: #7a7a82; min-width: 10px; }
+  .chart-xaxis { display: flex; gap: 2px; padding-top: 4px; height: 14px; }
+  .chart-xaxis span { flex: 1 1 0; text-align: center; font-size: 9px; color: #7a7a82; min-width: 0; overflow: hidden; }
   .chart-empty { color: #7a7a82; font-size: 12px; padding: 16px 0; text-align: center; }
-  .chart-legend { font-size: 10px; color: #8a8a92; padding-top: 6px; display: flex; gap: 10px; align-items: center; }
-  .chart-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
-  .chart-legend .seg-input { background: #00bfff; }
-  .chart-legend .seg-output { background: #ff6347; }
-  .chart-legend .seg-cache { background: #9b8bcf; }
 `;
