@@ -138,6 +138,7 @@ export class DetailPanelManager {
     + '<div class="chart-legend"><span class="dot seg-input"></span> input <span class="dot seg-output"></span> output <span class="dot seg-cache"></span> cache</div>';
   }
   function setText(id, v){ const el=document.getElementById(id); if(el) el.textContent = v; }
+  function setWidth(id, v){ const el=document.getElementById(id); if(el) el.style.width = v+'%'; }
   function renderAll(snap){
     const u = snap.usage;
     renderChart(snap.hourlyBuckets);
@@ -149,12 +150,14 @@ export class DetailPanelManager {
     }
     if(snap.contextPercent!==null){
       setText('ctx-pct', pct(snap.contextPercent));
+      setWidth('ctx-fill', Math.round(snap.contextPercent));
       const used = snap.contextTokens ? (snap.contextTokens.inputTokens+snap.contextTokens.cacheCreationTokens+snap.contextTokens.cacheReadTokens) : 0;
       setText('ctx-tok', fmtTok(used)+' / '+fmtTok(snap.windowSize));
     }
     if(u){
       const upd = (id, p, resetAt) => {
         setText(id+'-pct', p===null||p===undefined?'—':Math.round(p)+'%');
+        setWidth(id+'-fill', p===null||p===undefined?0:Math.round(p));
         // reset countdown formatting matching renderCountdownShort
         let txt = '—';
         if(resetAt){
@@ -212,7 +215,7 @@ function windowRow(label: string, percent: number | null, resetAt: Date | null, 
         <span class="window-label">${levelDot(level)} ${escapeHtml(label)}</span>
         <span class="window-pct" id="${id}-pct">${showData ? renderPercent(percent) : '—'}</span>
       </div>
-      <div class="bar-track"><div class="bar-fill ${accent}" style="width:${showData ? pct : 0}%"></div></div>
+      <div class="bar-track"><div class="bar-fill ${accent}" id="${id}-fill" style="width:${showData ? pct : 0}%"></div></div>
       <div class="window-reset" id="${id}-reset">${showData ? `重置 ${escapeHtml(countdown)}` : '不可用'}</div>
     </div>`;
 }
@@ -246,7 +249,7 @@ function contextBlock(s: HudSnapshot): string {
         <span class="window-label">${levelDot(level)} 用量</span>
         <span class="window-pct" id="ctx-pct">${show ? renderPercent(s.contextPercent) : '—'}</span>
       </div>
-      <div class="bar-track"><div class="bar-fill cyan" style="width:${show ? pct : 0}%"></div></div>
+      <div class="bar-track"><div class="bar-fill cyan" id="ctx-fill" style="width:${show ? pct : 0}%"></div></div>
       <div class="window-reset" id="ctx-tok">${used} / ${formatTokens(s.windowSize)}</div>
     </div>
   </section>`;
