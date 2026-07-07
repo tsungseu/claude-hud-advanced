@@ -199,7 +199,7 @@ export class StatusBarManager {
     }
     md.appendMarkdown('\n');
 
-    md.appendMarkdown(`---\n\n$(info) 点击查看完整 HUD`);
+    md.appendMarkdown(`最近 24h 用量见详情面板  \n\n---\n\n$(info) 点击查看用量仪表盘`);
     return md;
   }
 }

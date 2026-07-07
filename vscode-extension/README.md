@@ -6,7 +6,7 @@ A standalone VS Code extension that brings [claude-hud](https://github.com/tsung
 
 - **Status bar at a glance:** context fill and usage percentages with progress bars, refreshed every couple of seconds. The leading icon reflects status (`$(pulse)` normal, `$(warning)` near limit, `$(error)` at limit, `$(clock)` snapshot stale).
 - **Hover for the dashboard:** hovering the status bar shows a popover-style card with three blocks — plan reset windows (5h / weekly / monthly + countdowns), credits & spend (session cost estimate), and context usage. Fields the provider doesn't expose (monthly window, balance, monthly spend) show `—`.
-- **Click for the full HUD:** opens a panel rendering the complete claude-hud statusline — tools, agents, todos, git, cost — in the same colors you see in the terminal.
+- **Click for the dashboard:** opens a styled usage card — plan reset windows, credits & spend, context usage, and a per-hour token usage chart (last 24h, stacked input/output/cache). Updated live via push.
 - **Works with your provider:** reads usage snapshots from GLM, MiniMax, Alibaba, and Kimi coding plans (the quota pollers that ship with claude-hud), plus context from the session transcript.
 - **Session cost estimate:** accumulates tokens across the session transcript and multiplies by a per-model pricing table (`claudeHud.pricing`) to estimate spend in ¥. Built-in defaults cover common GLM models; override with your plan's rates for accuracy.
 - **Auto-detects your context window:** picks up `CLAUDE_CODE_AUTO_COMPACT_WINDOW` and the model id suffix (e.g. `glm-5.2[1m]` → 1M), so the percentage is right for your plan.
@@ -14,7 +14,6 @@ A standalone VS Code extension that brings [claude-hud](https://github.com/tsung
 ## Requirements
 
 - [Claude Code](https://claude.com/claude-code) with at least one session in the workspace (the extension reads the session transcript under `~/.claude/projects/`).
-- For the **full HUD panel**, install the [claude-hud](https://github.com/tsungseu/claude-hud-advanced) plugin (`/plugin install claude-hud`). The status bar summary works without it.
 - VS Code 1.85.0 or higher.
 
 ## Install
@@ -37,12 +36,11 @@ Then **reload the window** (`Developer: Reload Window`). The status bar item app
 | `claudeHud.provider` | `"auto"` | Which provider usage snapshot to read (`auto` probes GLM/MiniMax/Alibaba/Kimi). |
 | `claudeHud.refreshIntervalMs` | `2000` | Status bar refresh interval. |
 | `claudeHud.snapshotFreshnessMs` | `600000` | Max age of a usage snapshot before it's considered stale. |
-| `claudeHud.hudEntryPath` | `""` | Absolute path to claude-hud's `dist/index.js`. Empty = auto-detect the newest installed version. |
 | `claudeHud.pricing` | `{}` | Per-model token pricing in ¥/M tokens, for session cost estimation. Keys are model ids (e.g. `"glm-5.2"`); each value is `{ input, output, cache }`. Built-in defaults cover common GLM models. |
 
 ## Commands
 
-- **Claude HUD: Show Detail Panel** — open the full HUD panel (also triggered by clicking the status bar).
+- **Claude HUD: Show Detail Panel** — open the usage dashboard card (also triggered by clicking the status bar).
 - **Claude HUD: Refresh Now** — force an immediate refresh.
 - **Claude HUD: Select Usage Provider** — pick which provider snapshot to read.
 
@@ -52,7 +50,7 @@ This extension does **not** hook into the official Claude Code webview (that sur
 
 - **Context %** is computed from the last assistant turn's token usage in the session transcript (input + cache_creation + cache_read), divided by the context window size. It's an approximation — it can drift from Claude Code's native `used_percentage` right after a `/compact` or during parallel subagents.
 - **Usage %** comes straight from the provider snapshot file the claude-hud quota pollers write (`~/.claude/glm-usage-snapshot.json`, etc.). Anthropic's native `rate_limits` isn't reachable outside the statusline stdin, so for Anthropic plans the usage bar may be empty — use a provider with a poller.
-- The **detail panel** spawns claude-hud's `dist/index.js` with a reconstructed stdin, so it shows byte-for-byte the same HUD the terminal would.
+- The **dashboard** is fully self-contained: it reads the transcript + provider snapshot directly and renders its own styled card (no subprocess, no dependency on claude-hud being installed). The per-hour chart buckets assistant-turn tokens by hour across the workspace's last 24h of transcripts.
 
 ## Notes & troubleshooting
 
