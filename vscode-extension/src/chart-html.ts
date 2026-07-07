@@ -1,12 +1,12 @@
-// Pure HTML generator for the 31-day daily-usage chart. No vscode API, no IO —
-// consumes DailyBucket[] and returns an HTML string. Unit-testable.
+// Pure HTML generator for the per-hour usage chart. No vscode API, no IO —
+// consumes HourlyBucket[] and returns an HTML string. Unit-testable.
 //
 // Design (matches the reference): a wide, short bar chart — one cyan bar per
-// DAY over the last 31 days, height = that day's total tokens scaled to the
-// busiest day. Horizontal gridlines + a Y axis with ~4 ticks, sparse X-axis
-// date labels (first / ~middle / last), hover tooltips. Single color, NOT a
-// stacked breakdown.
-import type { DailyBucket } from './usage-data';
+// HOUR over the last 24h, height = that hour's total tokens scaled to the
+// busiest hour. Horizontal gridlines + a Y axis with ~4 ticks, sparse X-axis
+// hour labels (every ~3h so ~24 bars stay readable), hover tooltips. Single
+// color, NOT a stacked breakdown.
+import type { HourlyBucket } from './usage-data';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -23,20 +23,20 @@ function formatK(n: number): string {
   return String(n);
 }
 
-/** Shorten YYYY-MM-DD to M/D for axis labels (e.g. "2026-07-03" -> "7/3"). */
-function shortDate(day: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
-  if (!m) return day;
-  return `${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
+/** Extract the HH from an ISO hour key "YYYY-MM-DDTHH:00:00.000Z" -> "HH". */
+function hourLabel(hour: string): string {
+  // ISO form is fixed-width; positions 11..13 are the two-digit hour.
+  return hour.slice(11, 13);
 }
 
 /**
- * Pick ~4 evenly-spaced X-axis label indices across the buckets so the axis
- * isn't crowded (31 labels would be unreadable). Always includes the last.
+ * Pick evenly-spaced X-axis label indices across the buckets (~1 label per
+ * 3 hours) so the axis isn't crowded when there are up to ~24 bars. Always
+ * includes the last.
  */
 function sparseLabelIndices(n: number): Set<number> {
   if (n <= 1) return new Set(n === 1 ? [0] : []);
-  const target = Math.min(4, n);
+  const target = Math.min(8, Math.max(2, Math.round(n / 3)));
   const set = new Set<number>();
   for (let i = 0; i < target; i++) {
     set.add(Math.round((i * (n - 1)) / (target - 1)));
@@ -62,16 +62,16 @@ function yAxis(max: number): { ticks: string[]; scaledMax: number } {
 }
 
 /**
- * Render the 31-day daily-usage chart as an HTML string. Each non-zero day is
- * a single cyan bar; the busiest day is full height and others scale relative
+ * Render the per-hour usage chart as an HTML string. Each non-zero hour is a
+ * single cyan bar; the busiest hour is full height and others scale relative
  * to it. Includes a Y axis with ~4 ticks, horizontal gridlines, sparse X-axis
- * date labels, and per-bar hover tooltips. Returns a placeholder message when
+ * hour labels, and per-bar hover tooltips. Returns a placeholder message when
  * buckets is empty.
  */
-export function renderDailyChartHtml(buckets: DailyBucket[]): string {
+export function renderHourlyChartHtml(buckets: HourlyBucket[]): string {
   const nonZero = buckets.filter((b) => b.tokens > 0);
   if (nonZero.length === 0) {
-    return `<div class="chart-empty">最近 31 天无用量数据</div>`;
+    return `<div class="chart-empty">最近 24h 无用量数据</div>`;
   }
 
   const maxTotal = Math.max(...nonZero.map((b) => b.tokens), 1);
@@ -81,12 +81,12 @@ export function renderDailyChartHtml(buckets: DailyBucket[]): string {
   const bars = nonZero
     .map((b) => {
       const h = scaledMax > 0 ? (b.tokens / scaledMax) * 100 : 0;
-      const tip = `${escapeAttr(b.day)} · ${formatK(b.tokens)} tokens`;
+      const tip = `${escapeAttr(b.hour.slice(0, 16).replace('T', ' '))} · ${formatK(b.tokens)} tokens`;
       return `<div class="chart-bar" style="height:${h.toFixed(1)}%" data-tip="${escapeAttr(tip)}"></div>`;
     })
     .join('');
 
-  // Y-axis ticks + gridlines. Rendered top-to-bottom (highest first).
+  // Y-axis ticks. Rendered top-to-bottom (highest first).
   const yAxisHtml = ticks
     .slice()
     .reverse()
@@ -95,7 +95,7 @@ export function renderDailyChartHtml(buckets: DailyBucket[]): string {
 
   // X-axis: one slot per bar, but only show a label at sparse indices.
   const xAxisHtml = nonZero
-    .map((b, i) => `<span>${labelIdx.has(i) ? escapeHtml(shortDate(b.day)) : ''}</span>`)
+    .map((b, i) => `<span>${labelIdx.has(i) ? escapeHtml(hourLabel(b.hour)) : ''}</span>`)
     .join('');
 
   return `<div class="chart-wrap">
