@@ -51,3 +51,18 @@ test('renderDailyChartHtml tooltip uses YYYY-MM-DD + token total; sparse X label
   // Tooltip on the 2026-07-03 bar shows the date + formatted total.
   assert.match(html, /data-tip="2026-07-03 · 12\.3k tokens"/);
 });
+
+test('renderDailyChartHtml marks the first/last bars as edge bars for tooltip alignment', () => {
+  const buckets: DailyBucket[] = [
+    { day: '2026-07-03', tokens: 1 },
+    { day: '2026-07-04', tokens: 2 },
+    { day: '2026-07-05', tokens: 3 },
+  ];
+  const html = renderDailyChartHtml(buckets);
+  // First bar = left edge, last bar = right edge, middle bar = no edge.
+  assert.match(html, /data-edge="left"/);
+  assert.match(html, /data-edge="right"/);
+  // Exactly one of each.
+  assert.equal((html.match(/data-edge="left"/g) || []).length, 1);
+  assert.equal((html.match(/data-edge="right"/g) || []).length, 1);
+});

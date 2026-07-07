@@ -140,7 +140,8 @@ export class DetailPanelManager {
     const bars=all.map((b,i)=>{
       const h=((b.tokens||0)/scaledMax*100).toFixed(1);
       const tip=esc(b.day)+' · '+fmtTok(b.tokens||0)+' tokens';
-      return '<div class="chart-bar" style="height:'+h+'%" data-tip="'+tip+'"></div>';
+      const edge=i===0?' data-edge="left"':(i===n-1?' data-edge="right"':'');
+      return '<div class="chart-bar" style="height:'+h+'%" data-tip="'+tip+'"'+edge+'></div>';
     }).join('');
     const yAxisHtml=ticks.slice().reverse().map(t=>'<div class="chart-ytick"><span>'+esc(t)+'</span></div>').join('');
     const xAxisHtml=all.map((b,i)=>'<span>'+(labelIdx.has(i)?esc(shortDate(b.day)):'')+'</span>').join('');
@@ -357,16 +358,20 @@ const DASHBOARD_CSS = `
   .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
   .msg { padding: 24px 16px; color: #8a8a92; white-space: pre-wrap; line-height: 1.6; font-size: 12px; }
   .chart-block h3 { margin-bottom: 8px; }
+  /* The chart block needs extra side room so edge-bar hover tooltips aren't
+     clipped by the card's overflow:hidden, and a taller bottom band for the
+     X-axis date labels. */
+  .chart-block { padding-bottom: 18px; }
   /* Chart layout: a Y-axis column on the left, plot area (gridlines + bars)
      on the right, X-axis labels under the plot. Wide and short to match the
      reference design. */
-  .chart-wrap { display: flex; align-items: stretch; gap: 6px; }
+  .chart-wrap { display: flex; align-items: stretch; gap: 8px; }
   .chart-yaxis {
     display: flex; flex-direction: column; justify-content: space-between;
-    width: 30px; flex-shrink: 0; text-align: right;
+    width: 40px; flex-shrink: 0; text-align: right;
   }
   .chart-ytick { height: 0; display: flex; align-items: center; justify-content: flex-end; }
-  .chart-ytick span { font-size: 9px; color: #7a7a82; font-variant-numeric: tabular-nums; transform: translateY(-50%); }
+  .chart-ytick span { font-size: 10px; color: #7a7a82; font-variant-numeric: tabular-nums; transform: translateY(-50%); white-space: nowrap; }
   .chart-plot { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
   /* 4 horizontal gridlines via repeating-linear-gradient at 0/33/66/100%. */
   .chart {
@@ -396,7 +401,11 @@ const DASHBOARD_CSS = `
     background: #000; color: #fff; padding: 4px 8px; border-radius: 4px;
     font-size: 10px; pointer-events: none; z-index: 10;
   }
-  .chart-xaxis { display: flex; gap: 2px; padding-top: 4px; height: 14px; }
-  .chart-xaxis span { flex: 1 1 0; text-align: center; font-size: 9px; color: #7a7a82; min-width: 0; overflow: hidden; }
+  /* Edge bars: flip tooltip alignment so it stays inside the card instead of
+     overflowing (the card has overflow:hidden for its rounded corners). */
+  .chart-bar[data-edge="left"]:hover::after { left: 0; transform: none; }
+  .chart-bar[data-edge="right"]:hover::after { left: auto; right: 0; transform: none; }
+  .chart-xaxis { display: flex; gap: 2px; padding-top: 5px; height: 20px; }
+  .chart-xaxis span { flex: 1 1 0; text-align: center; font-size: 10px; color: #7a7a82; min-width: 0; white-space: nowrap; }
   .chart-empty { color: #7a7a82; font-size: 12px; padding: 16px 0; text-align: center; }
 `;

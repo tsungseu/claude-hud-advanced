@@ -79,11 +79,15 @@ export function renderDailyChartHtml(buckets: DailyBucket[]): string {
   const { ticks, scaledMax } = yAxis(maxTotal);
   const labelIdx = sparseLabelIndices(buckets.length);
 
+  const n = buckets.length;
   const bars = buckets
-    .map((b) => {
+    .map((b, i) => {
       const h = scaledMax > 0 ? (b.tokens / scaledMax) * 100 : 0;
       const tip = `${escapeAttr(b.day)} · ${formatK(b.tokens)} tokens`;
-      return `<div class="chart-bar" style="height:${h.toFixed(1)}%" data-tip="${escapeAttr(tip)}"></div>`;
+      // Mark edge bars so the hover tooltip can flip its alignment instead of
+      // overflowing (and being clipped by) the card on the left/right edges.
+      const edge = i === 0 ? ' data-edge="left"' : i === n - 1 ? ' data-edge="right"' : '';
+      return `<div class="chart-bar" style="height:${h.toFixed(1)}%" data-tip="${escapeAttr(tip)}"${edge}></div>`;
     })
     .join('');
 
