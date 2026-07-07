@@ -182,7 +182,6 @@ export class DetailPanelManager {
       };
       upd('w5', u.fiveHourPercent, u.fiveHourResetAt);
       upd('w7', u.sevenDayPercent, u.sevenDayResetAt);
-      upd('wm', null, null);
     }
   }
   renderAll(initial);
@@ -210,7 +209,6 @@ function resetBlock(u: ProviderUsage | null): string {
   const rows = [
     windowRow('5小时', u?.fiveHourPercent ?? null, u?.fiveHourResetAt ?? null, 'coral', 'w5'),
     windowRow('每周', u?.sevenDayPercent ?? null, u?.sevenDayResetAt ?? null, 'coral', 'w7'),
-    windowRow('每月', null, null, 'coral', 'wm'),
   ];
   return `  <section class="block">
     <h3>计划重置</h3>
@@ -358,7 +356,7 @@ const DASHBOARD_CSS = `
   .kv.muted, .kv.muted .value { color: #8a8a92; font-weight: 400; }
   .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
   .msg { padding: 24px 16px; color: #8a8a92; white-space: pre-wrap; line-height: 1.6; font-size: 12px; }
-  .chart-block h3 { margin-bottom: 8px; }
+  .chart-block h3 { margin-bottom: 14px; }
   /* The chart block needs extra side room so edge-bar hover tooltips aren't
      clipped by the card's overflow:hidden, and a taller bottom band for the
      X-axis date labels. */
