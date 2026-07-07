@@ -139,7 +139,8 @@ export class DetailPanelManager {
     const shortDate=day=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(day); return m?(parseInt(m[2],10)+'/'+parseInt(m[3],10)):day; };
     const bars=all.map((b,i)=>{
       const h=((b.tokens||0)/scaledMax*100).toFixed(1);
-      const tip=esc(b.day)+' · '+fmtTok(b.tokens||0)+' tokens';
+      // Tooltip shows ONLY the token total — the X axis already carries the date.
+      const tip=fmtTok(b.tokens||0)+' tokens';
       const edge=i===0?' data-edge="left"':(i===n-1?' data-edge="right"':'');
       return '<div class="chart-bar" style="height:'+h+'%" data-tip="'+tip+'"'+edge+'></div>';
     }).join('');

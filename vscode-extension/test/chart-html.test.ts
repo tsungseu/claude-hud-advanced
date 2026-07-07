@@ -38,18 +38,15 @@ test('renderDailyChartHtml scales bar height by the max-tokens day', () => {
   assert.ok(Math.max(...heights) > Math.min(...heights));
 });
 
-test('renderDailyChartHtml tooltip uses YYYY-MM-DD + token total; sparse X labels use M/D', () => {
-  // 5 days so a sparse label index lands on the first bar.
+test('renderDailyChartHtml tooltip shows ONLY the token total (no date — X axis carries it)', () => {
   const buckets: DailyBucket[] = [
     { day: '2026-07-03', tokens: 12345 },
     { day: '2026-07-04', tokens: 0 },
-    { day: '2026-07-05', tokens: 0 },
-    { day: '2026-07-06', tokens: 0 },
-    { day: '2026-07-07', tokens: 0 },
   ];
   const html = renderDailyChartHtml(buckets);
-  // Tooltip on the 2026-07-03 bar shows the date + formatted total.
-  assert.match(html, /data-tip="2026-07-03 · 12\.3k tokens"/);
+  // Tooltip is the bare token total, no date prefix.
+  assert.match(html, /data-tip="12\.3k tokens"/);
+  assert.doesNotMatch(html, /data-tip="2026-07-03/);
 });
 
 test('renderDailyChartHtml marks the first/last bars as edge bars for tooltip alignment', () => {

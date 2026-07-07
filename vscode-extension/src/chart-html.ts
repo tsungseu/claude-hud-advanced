@@ -83,7 +83,9 @@ export function renderDailyChartHtml(buckets: DailyBucket[]): string {
   const bars = buckets
     .map((b, i) => {
       const h = scaledMax > 0 ? (b.tokens / scaledMax) * 100 : 0;
-      const tip = `${escapeAttr(b.day)} · ${formatK(b.tokens)} tokens`;
+      // Tooltip shows ONLY the token total — the X axis already carries the
+      // date, and a wide "date · tokens" string gets clipped at the card edge.
+      const tip = `${formatK(b.tokens)} tokens`;
       // Mark edge bars so the hover tooltip can flip its alignment instead of
       // overflowing (and being clipped by) the card on the left/right edges.
       const edge = i === 0 ? ' data-edge="left"' : i === n - 1 ? ' data-edge="right"' : '';
