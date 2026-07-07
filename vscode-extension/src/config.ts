@@ -11,7 +11,6 @@ function cfg(): vscode.WorkspaceConfiguration {
 export interface HudSettings {
   contextWindowSize: number;
   modelLabel: string;
-  hudEntryPath: string;
   snapshotFreshnessMs: number;
   refreshIntervalMs: number;
   provider: 'auto' | 'glm' | 'minimax' | 'alibaba' | 'kimi';
@@ -43,7 +42,6 @@ export function readSettings(): HudSettings {
   return {
     contextWindowSize: c.get<number>('contextWindowSize', 0),
     modelLabel: c.get<string>('modelLabel', ''),
-    hudEntryPath: c.get<string>('hudEntryPath', ''),
     snapshotFreshnessMs: c.get<number>('snapshotFreshnessMs', 600_000),
     refreshIntervalMs: c.get<number>('refreshIntervalMs', 2000),
     provider: c.get<'auto' | 'glm' | 'minimax' | 'alibaba' | 'kimi'>('provider', 'auto'),

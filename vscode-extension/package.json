@@ -65,11 +65,6 @@
           "default": "",
           "description": "Override the model display name. When empty, the provider is inferred from ANTHROPIC_BASE_URL in ~/.claude/settings.json."
         },
-        "claudeHud.hudEntryPath": {
-          "type": "string",
-          "default": "",
-          "description": "Absolute path to claude-hud's dist/index.js. When empty, the newest installed plugin version is auto-detected via version-glob."
-        },
         "claudeHud.snapshotFreshnessMs": {
           "type": "number",
           "default": 600000,
