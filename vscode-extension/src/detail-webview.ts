@@ -365,17 +365,21 @@ const DASHBOARD_CSS = `
   /* Chart layout: a Y-axis column on the left, plot area (gridlines + bars)
      on the right, X-axis labels under the plot. Wide and short to match the
      reference design. */
-  .chart-wrap { display: flex; align-items: stretch; gap: 8px; }
+  .chart-wrap { display: flex; align-items: flex-start; gap: 8px; }
   .chart-yaxis {
     display: flex; flex-direction: column; justify-content: space-between;
-    width: 40px; flex-shrink: 0; text-align: right;
+    width: 48px; flex-shrink: 0; text-align: right;
+    /* Pin the axis to the chart's own height (not the taller plot column that
+       includes the X-axis band) so ticks line up with the gridlines and the
+       top/bottom labels don't overflow into neighbouring rows. */
+    align-self: flex-start; height: 100px;
   }
   .chart-ytick { height: 0; display: flex; align-items: center; justify-content: flex-end; }
   .chart-ytick span { font-size: 10px; color: #7a7a82; font-variant-numeric: tabular-nums; transform: translateY(-50%); white-space: nowrap; }
   .chart-plot { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
   /* 4 horizontal gridlines via repeating-linear-gradient at 0/33/66/100%. */
   .chart {
-    display: flex; align-items: flex-end; gap: 2px;
+    display: flex; align-items: flex-end; gap: 0;
     height: 100px; padding: 0;
     border-bottom: 1px solid #3a3a40;
     background-image: repeating-linear-gradient(
@@ -389,9 +393,8 @@ const DASHBOARD_CSS = `
     );
   }
   .chart-bar {
-    flex: 1 1 0; min-width: 2px; border-radius: 2px 2px 0 0;
+    flex: 1 1 0; min-width: 1px;
     background: #00bfff; position: relative; opacity: 0.92;
-    box-shadow: 0 0 6px rgba(0,191,255,0.25);
     transition: opacity 0.15s ease;
   }
   .chart-bar:hover { opacity: 1; }
@@ -405,7 +408,7 @@ const DASHBOARD_CSS = `
      overflowing (the card has overflow:hidden for its rounded corners). */
   .chart-bar[data-edge="left"]:hover::after { left: 0; transform: none; }
   .chart-bar[data-edge="right"]:hover::after { left: auto; right: 0; transform: none; }
-  .chart-xaxis { display: flex; gap: 2px; padding-top: 5px; height: 20px; }
+  .chart-xaxis { display: flex; gap: 0; padding-top: 5px; height: 20px; }
   .chart-xaxis span { flex: 1 1 0; text-align: center; font-size: 10px; color: #7a7a82; min-width: 0; white-space: nowrap; }
   .chart-empty { color: #7a7a82; font-size: 12px; padding: 16px 0; text-align: center; }
 `;
