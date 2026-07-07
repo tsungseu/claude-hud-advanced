@@ -22,7 +22,7 @@ A standalone VS Code extension that brings [claude-hud](https://github.com/tsung
 cd vscode-extension
 npm install
 npm run package
-code --install-extension claude-hud-vscode-0.2.0.vsix
+code --install-extension claude-hud-vscode-0.4.0.vsix
 ```
 
 Then **reload the window** (`Developer: Reload Window`). The status bar item appears on the right; click it to open the detail panel.
