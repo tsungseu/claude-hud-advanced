@@ -648,9 +648,18 @@ export function collectHudSnapshot(
     ? readDailyUsage(path.join(getProjectsDir(), encodeProjectDir(workspaceFolder)), Date.now())
     : [];
 
-  // Cost: look up pricing by exact model id, then by the suffix-stripped form.
+  // Cost: look up pricing by the model id, case-insensitively. Tries the raw
+  // id, then the context-suffix-stripped form (e.g. "glm-5.2[1m]" -> "glm-5.2"),
+  // so users can set either "GLM-5.2" or "glm-5.2" in claudeHud.pricing.
   const pricing = options.pricing ?? {};
-  const pricingEntry = pricing[modelId] ?? pricing[stripContextSuffix(modelId)] ?? null;
+  const lookupPricing = (id: string): ModelPricing | null => {
+    const lower = id.toLowerCase();
+    for (const key of Object.keys(pricing)) {
+      if (key.toLowerCase() === lower) return pricing[key];
+    }
+    return null;
+  };
+  const pricingEntry = lookupPricing(modelId) ?? lookupPricing(stripContextSuffix(modelId)) ?? null;
   const sessionCostYuan = computeSessionCost(sessionTokens, pricingEntry);
 
   return {
