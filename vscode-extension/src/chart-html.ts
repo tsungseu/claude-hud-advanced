@@ -24,9 +24,17 @@ function formatK(n: number): string {
 }
 
 /** Extract the HH from an ISO hour key "YYYY-MM-DDTHH:00:00.000Z" -> "HH". */
-function hourLabel(hour: string): string {
-  // ISO form is fixed-width; positions 11..13 are the two-digit hour.
-  return hour.slice(11, 13);
+function hourHH(hour: string): number {
+  return parseInt(hour.slice(11, 13), 10);
+}
+
+/** Build an hour-range label for the X axis, e.g. hour=13 -> "13:00-14:00".
+ * 23 wraps to 0 ("23:00-00:00"). */
+function hourRangeLabel(hour: string): string {
+  const start = hourHH(hour);
+  const end = (start + 1) % 24;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(start)}:00-${p(end)}:00`;
 }
 
 /**
@@ -69,19 +77,21 @@ function yAxis(max: number): { ticks: string[]; scaledMax: number } {
  * buckets is empty.
  */
 export function renderHourlyChartHtml(buckets: HourlyBucket[]): string {
-  const nonZero = buckets.filter((b) => b.tokens > 0);
-  if (nonZero.length === 0) {
+  // The full 24h timeline is rendered: idle hours show as zero-height bars so
+  // every slot is a consecutive hour range (5:00-6:00, 6:00-7:00, ...). An
+  // entirely empty array (no buckets at all) still shows the placeholder.
+  if (buckets.length === 0) {
     return `<div class="chart-empty">最近 24h 无用量数据</div>`;
   }
 
-  const maxTotal = Math.max(...nonZero.map((b) => b.tokens), 1);
+  const maxTotal = Math.max(...buckets.map((b) => b.tokens), 1);
   const { ticks, scaledMax } = yAxis(maxTotal);
-  const labelIdx = sparseLabelIndices(nonZero.length);
+  const labelIdx = sparseLabelIndices(buckets.length);
 
-  const bars = nonZero
+  const bars = buckets
     .map((b) => {
       const h = scaledMax > 0 ? (b.tokens / scaledMax) * 100 : 0;
-      const tip = `${escapeAttr(b.hour.slice(0, 16).replace('T', ' '))} · ${formatK(b.tokens)} tokens`;
+      const tip = `${escapeAttr(hourRangeLabel(b.hour))} · ${formatK(b.tokens)} tokens`;
       return `<div class="chart-bar" style="height:${h.toFixed(1)}%" data-tip="${escapeAttr(tip)}"></div>`;
     })
     .join('');
@@ -93,9 +103,10 @@ export function renderHourlyChartHtml(buckets: HourlyBucket[]): string {
     .map((t) => `<div class="chart-ytick"><span>${escapeHtml(t)}</span></div>`)
     .join('');
 
-  // X-axis: one slot per bar, but only show a label at sparse indices.
-  const xAxisHtml = nonZero
-    .map((b, i) => `<span>${labelIdx.has(i) ? escapeHtml(hourLabel(b.hour)) : ''}</span>`)
+  // X-axis: one slot per bar; show the hour-range label only at sparse indices
+  // so ~24 bars stay readable.
+  const xAxisHtml = buckets
+    .map((b, i) => `<span>${labelIdx.has(i) ? escapeHtml(hourRangeLabel(b.hour)) : ''}</span>`)
     .join('');
 
   return `<div class="chart-wrap">

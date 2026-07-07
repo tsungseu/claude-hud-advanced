@@ -314,7 +314,20 @@ export function readHourlyUsage(projectDir: string, now: number): HourlyBucket[]
     }
   }
 
-  return Array.from(buckets.values()).sort((a, b) => a.hour.localeCompare(b.hour));
+  // Fill a CONTINUOUS 24-hour axis: every hour in (now-24h, now] gets a
+  // bucket, even when tokens=0, so the chart shows the full timeline with
+  // zero-height bars for idle hours (matches the reference). We truncate to
+  // the hour and walk 24 steps back from the current hour.
+  const result: HourlyBucket[] = [];
+  const end = new Date(now);
+  end.setUTCMinutes(0, 0, 0);
+  for (let i = 23; i >= 0; i--) {
+    const d = new Date(end.getTime() - i * 3600_000);
+    const hour = d.toISOString();
+    const b = buckets.get(hour);
+    result.push(b ?? { hour, tokens: 0 });
+  }
+  return result;
 }
 
 /** Per-million-token price in yuan for a model, used for cost estimation. */

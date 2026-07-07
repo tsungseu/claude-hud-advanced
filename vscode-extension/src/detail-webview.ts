@@ -125,25 +125,26 @@ export class DetailPanelManager {
   function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function renderChart(buckets){
     const el = document.getElementById('chart-area'); if(!el) return;
-    const nz = (buckets||[]).filter(b=>(b.tokens||0)>0);
-    if(!nz.length){ el.innerHTML = '<div class="chart-empty">最近 24h 无用量数据</div>'; return; }
-    const max = Math.max(...nz.map(b=>b.tokens),1);
+    const all = buckets||[];
+    if(!all.length){ el.innerHTML = '<div class="chart-empty">最近 24h 无用量数据</div>'; return; }
+    const max = Math.max(...all.map(b=>b.tokens||0),1);
     // "nice" Y axis: round max up to 1/2/5×10^k, 4 ticks.
     const exp=Math.pow(10,Math.floor(Math.log10(max)));
     const frac=max/exp; let nf; if(frac<=1)nf=1; else if(frac<=2)nf=2; else if(frac<=5)nf=5; else nf=10;
     const scaledMax=nf*exp;
     const ticks=[0,1,2,3].map(i=>fmtTok(scaledMax*i/3));
     // sparse X labels: ~1 per 3 hours, always the last.
-    const n=nz.length, target=Math.min(8,Math.max(2,Math.round(n/3))), labelIdx=new Set();
+    const n=all.length, target=Math.min(8,Math.max(2,Math.round(n/3))), labelIdx=new Set();
     if(n===1) labelIdx.add(0); else for(let i=0;i<target;i++) labelIdx.add(Math.round(i*(n-1)/(target-1)));
-    const hh=hour=>String(hour).slice(11,13);
-    const bars=nz.map((b,i)=>{
-      const h=(b.tokens/scaledMax*100).toFixed(1);
-      const tip=esc(b.hour.slice(0,16).replace('T',' '))+' · '+fmtTok(b.tokens)+' tokens';
+    const pad=x=>String(x).padStart(2,'0');
+    const range=hour=>{ const s=parseInt(hour.slice(11,13),10); const e=(s+1)%24; return pad(s)+':00-'+pad(e)+':00'; };
+    const bars=all.map((b,i)=>{
+      const h=((b.tokens||0)/scaledMax*100).toFixed(1);
+      const tip=esc(range(b.hour))+' · '+fmtTok(b.tokens||0)+' tokens';
       return '<div class="chart-bar" style="height:'+h+'%" data-tip="'+tip+'"></div>';
     }).join('');
     const yAxisHtml=ticks.slice().reverse().map(t=>'<div class="chart-ytick"><span>'+esc(t)+'</span></div>').join('');
-    const xAxisHtml=nz.map((b,i)=>'<span>'+(labelIdx.has(i)?esc(hh(b.hour)):'')+'</span>').join('');
+    const xAxisHtml=all.map((b,i)=>'<span>'+(labelIdx.has(i)?esc(range(b.hour)):'')+'</span>').join('');
     el.innerHTML='<div class="chart-wrap"><div class="chart-yaxis">'+yAxisHtml+'</div>'
       +'<div class="chart-plot"><div class="chart">'+bars+'</div>'
       +'<div class="chart-xaxis">'+xAxisHtml+'</div></div></div>';
